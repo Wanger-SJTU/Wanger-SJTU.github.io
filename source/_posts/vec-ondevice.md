@@ -1,5 +1,5 @@
 ---
-title: 端侧向量数据
+title: 端侧需要向量数据库吗
 tags:
   - vecdb
   - ANN
