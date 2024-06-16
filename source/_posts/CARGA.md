@@ -1,5 +1,5 @@
 ---
-title: CARGA
+title: Nivdia向量数据库图检索最新标杆——CAGRA
 tags:
   - ANNs
 category:
