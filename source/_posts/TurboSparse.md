@@ -5,6 +5,7 @@ tags:
 category:
   - paper
 date: 2024-08-10 23:04:02
+mathjax: true 
 ---
 
 ## 关于llama稀疏性的观察
