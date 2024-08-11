@@ -9,9 +9,11 @@ date: 2024-08-10 23:04:02
 
 ## 关于llama稀疏性的观察
 llama原始模型的FFN计算过程为：
+
 $$
 f(x) = \text{silu}(xW_{Gate}) \odot xW_{UP} \times W_{Down}
 $$
+
 ```python
 class FeedForward(nn.Module):
     def forward(self, x):
@@ -36,6 +38,7 @@ $$
 从训练过程上来看，替换以后收敛性没有影响，结果的评价指标上也没有太大影响。
 
 下一步就是进一步评价下修改以后得稀疏度了。这里没有直接用两个mask的交集，而是按照topk的方法做了评测
+
 $$
 \text{Mask}(x) := Top_k(|\text{Combined}(x)|) 
 $$
