@@ -62,7 +62,7 @@ x = x - 1024
 > 量化存储的int值是加上了128转为u8，在反量化时需要减去这个128即可
 
 
-
+code: https://github.com/Wanger-SJTU/recipes/tree/master/fast_dequant
 **参考链接：**
 1. https://zhuanlan.zhihu.com/p/657072856
 
