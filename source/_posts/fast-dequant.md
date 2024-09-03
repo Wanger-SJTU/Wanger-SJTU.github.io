@@ -1,10 +1,11 @@
 ---
 title: Nvidia 的快速反量化操作
 tags:
-  - null
+  - llm
 category:
-  - null
+  - 技术
 date: 2024-08-16 21:29:22
+mathjax: true 
 ---
 
 主要记录了论文Who Says Elephants Can't Run: Bringing Large Scale MoE Models into Cloud Scale Production中关于反量化的快速操作。
