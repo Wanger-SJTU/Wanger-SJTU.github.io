@@ -13,4 +13,5 @@ date: 2024-09-09 22:16:19
 - powerinfer2
 - TDA 
 
-https://zhuanlan.zhihu.com/p/717926933
+- https://zhuanlan.zhihu.com/p/717926933
+- https://zhuanlan.zhihu.com/p/675585887
