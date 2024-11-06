@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>SSD笔记-第二篇SSD结构与性能评估概述 | 一只特立独行的猪</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script src="https://www.googletagmanager.com/gtag/js?id=G-D0GZY9PECP" async></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-D0GZY9PECP');
+</script><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><meta name="generator" content="Hexo 6.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">SSD笔记-第二篇SSD结构与性能评估概述</h1><a id="logo" href="/.">一只特立独行的猪</a><p class="description">既然我存在，就不能装作不存在</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/tags"><i class="fa fa-tag"> 标签</i></a><a href="/categories"><i class="fa fa-tag"> 分类</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">SSD笔记-第二篇SSD结构与性能评估概述</h1><div class="post-meta">2024-09-22<span> | </span><span class="category"><a href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><p>本文转载自：<a target="_blank" rel="noopener" href="https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-2/">https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-2/</a></p>
+<h1 id="緣由"><a href="#緣由" class="headerlink" title="緣由"></a>緣由</h1><p>這篇主要談論 Nand flash 的不同 cell type，基本的 SSD 系統架構，及如何做 SSD 效能評定（Benchmarking）。作者是在 booking.com 上班的軟體工程師。有用過應該就知道這是很大的旅遊訂房行程規劃服務網站，在這類工作環境可能需要對底層的效能有深入解快，才能解決工作上的實務問題。我覺得這類軟體從業人員提供的觀點對自己來說幫助很大，所以翻譯&#x2F;兼做做筆記。</p>
+<h1 id="SSD-？"><a href="#SSD-？" class="headerlink" title="SSD ？"></a>SSD ？</h1><p>Solid state drives，顧名思義 SSD 設計裡去除了傳統硬碟裡不 solid，會動的部分，改善了噪音、震動、讀寫速度慢、易損壞及資料分散時需要硬碟重組來改善讀取時間等缺點。<br>SSD 作為儲存裝置：</p>
+<ul>
+<li>優點：<ul>
+<li>隨機存取快、且存取時間固定，HDD 的 seek time ？ 沒這毛病！</li>
+<li>體積小，看看這些愈來愈小的筆記型電腦、移動裝置、SD卡</li>
+<li>少了傳統硬碟機械故障、硬碟重組等煩惱。</li>
+</ul>
+</li>
+<li>缺點：<ul>
+<li>Cell 有讀寫次數限制(wearing off&#x2F;wear-out)<blockquote>
+<p>但對於 IT 人員來說， HDD 也是有看人品、需買高階型號跟擺乖乖才能保證資料安全的問題。 <img src="https://comet.noonspace.com/w61NoonSpace/kuai/MsgInfo/LogoKuai.png" alt="乖乖 LOGO, kuai.com.tw"></p>
+</blockquote>
+</li>
+<li>bit&#x2F;$ 較高, (TODO)</li>
+</ul>
+</li>
+</ul>
+<h2 id="NAND-flash-種類"><a href="#NAND-flash-種類" class="headerlink" title="NAND flash 種類"></a>NAND flash 種類</h2><p>依各個 block 可儲存的資料多寡，可分為：<br>SLC, MLC, eMLC, TLC, QLC, 3D NAND, see this <a target="_blank" rel="noopener" href="https://searchstorage.techtarget.com/definition/flash-memory">link</a> for ref</p>
+<p>關於製程資訊（floating gate, charge trap) 見 <a href="#%E5%BF%AB%E9%96%83%E8%A8%98%E6%86%B6%E9%AB%94%E7%9A%84%E8%B7%AF%E7%B7%9A%E4%B9%8B%E7%88%AD">3
+</a></p>
+<blockquote>
+<p>關於 IC &#x2F; PCB &#x2F; SMT 的製程可能要補文章（TODO）</p>
+</blockquote>
+<h2 id="存取介面"><a href="#存取介面" class="headerlink" title="存取介面"></a>存取介面</h2><p>目前看到的 SSD 架構 &#x3D;  SSD controller 晶片 + RAM + NAND flash<br>controll 支援多種不同的 host interface 指令格式</p>
+<ul>
+<li>Serial ATA (SATA), 3.0 ~ 6GBit&#x2F;s</li>
+<li>PCI Express (PCIe), 3.0 ~ 8Gbit&#x2F;s per lane, 4 lanes max</li>
+<li><a target="_blank" rel="noopener" href="https://nvmexpress.org/">nvme</a></li>
+<li>Serial Attached SCSI interface (SAS), ~ 12 Gbit&#x2F;s</li>
+</ul>
+<blockquote>
+<p>也有看到 open channel SSD 將主控權交給作業系統，詳情可見 [2](#lightnvm, linux implementation of open channel SSD)。我覺得有點像是 zfs 捨棄 raid 卡讓檔案系統透過 HBA 卡接管硬碟所有資訊的作法。我覺的軟體定義的方式應該是終端用戶最後的選擇，畢竟免了 vendor lock in 的問題。</p>
+</blockquote>
+<p>controller 把 NAND flash 的 block, page size, GC(garbage collection) 等細節藏起來，讓 host interface 及其上層作業系統有跟 HDD 一樣的存取介面。</p>
+<h2 id="效能評定-Benchmarking"><a href="#效能評定-Benchmarking" class="headerlink" title="效能評定 Benchmarking"></a>效能評定 Benchmarking</h2><p>原文作者有發現當時的 SSD 效能報告<a target="_blank" rel="noopener" href="http://blog.zorinaq.com/many-ssd-benchmark-reviews-contain-flaws/">亂象</a>，例如不同的 <a target="_blank" rel="noopener" href="https://gerardnico.com/io/drive/lba">LBA</a>, 過於簡單的 <a target="_blank" rel="noopener" href="https://www.userbenchmark.com/Faq/What-is-queue-depth/41">queue size</a> 測試情節。文中也提到 SSD 的讀寫測試其實要在寫入一定的隨機資料<a target="_blank" rel="noopener" href="https://searchstorage.techtarget.com/feature/The-truth-about-SSD-performance-benchmarks">pre-conditioning, warm up</a>才有測出 controller GC 能力並具參考價值。而非當時很多資料是拿了新的 SSD 測了 happy path 很開心就把資料放出來這樣，文中舉的比較好的範例是這篇關於 samsung 840 pro 做的<a target="_blank" rel="noopener" href="https://www.storagereview.com/samsung_ssd_840_pro_review">評測</a>，可以很明顯看到讀寫效能(IOPS, Read&#x2F;Write at different sizes&#x2F;order)在一定的讀寫後明顯下降，文中也對其拿實際的應用案例如資料庫、網頁伺服器做了分析，並得到其在前述企業應用環境效能較差的結論。</p>
+<blockquote>
+<p><code>圖一堆，真是很有心 XD</code></p>
+</blockquote>
+<p>目前不確定儲存裝置是否有個明確的效能評定規範（針對不同應用情境、不同裝置、不同 host interface）。但作者提出一套他的原則（2.3內容）：</p>
+<ul>
+<li>workload type ，確定你的應用環境是哪種讀寫操作居多</li>
+<li>percentage of read &#x2F; write, 設定同步進行的讀寫操作比例，如 30% 讀 70% 寫</li>
+<li>queue length，你有多少同步執行的執行緒(thread)在對儲存裝置下指令</li>
+<li>size of data chunk, 你的應用環境的檔案讀寫大小（4KB, 8KB 之類的)</li>
+</ul>
+<blockquote>
+<p>最後一點不太確定怎麼定義，如果你是跑 postgresql, mysql 那要怎麼知道大小？</p>
+</blockquote>
+<p>以及需要觀測的指標：</p>
+<ul>
+<li>Throughput: KB&#x2F;s, MB&#x2F;s 資料轉換的效率，一般是 sequential 的評定會看</li>
+<li>IOPS: 每秒可完成的 Input&#x2F;Output（IO） 操作，這是以作業系統的觀點來看，通常是拿 4KB 的寫入來測，用來評定隨機操作的效能。<blockquote>
+<p>應該是因為 4KB 是大部分作業系統 virtual memory 預設的 page size, 這也要因應使用情節而調整。</p>
+</blockquote>
+</li>
+<li>latency:  下指令到完成指令回傳結果需要的時間 μs, ms</li>
+</ul>
+<p>IOPS 也可以換算成 throughput, 如 1000 IOPS 在 4KB 檔案大小下 就是 4 MB&#x2F;s. 作者也舉了個可能的 logging 系統案例， 10k IOPS, log 檔四散各地，可能的 throughput 會是 20 MB&#x2F;s </p>
+<p>另外 throughput 不等同於效能，假設你有個伺服器裝了個 10G 網卡，偏偏你的系統每次作業要跟 25 個 Database 拿資料，每個連線要花 20 ms 好死不死你還寫成 single blocked thread，每次處理一個網頁頁面至少都要多花 500 ms，這個就偏人的問題，而非系統效能瓶頸。</p>
+<blockquote>
+<p>所以我想一般都是在系統發展到一定規模，要做大、或是遇上應用程式端無法解決瓶頸時才會多考慮底層儲存系統選擇與設定。</p>
+</blockquote>
+<p>在確保自己的系統架構不會對儲存系統造成不必要的負擔之後，這三項指標（一起）是系統管理員、軟體工程師在評估自己的硬體是否符合需求時的常用指標。</p>
+<h1 id="參考資料"><a href="#參考資料" class="headerlink" title="參考資料"></a>參考資料</h1><h2 id="coding-for-ssd-part2"><a href="#coding-for-ssd-part2" class="headerlink" title="coding for ssd part2"></a>coding for ssd part2</h2><p><a target="_blank" rel="noopener" href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-2-architecture-of-an-ssd-and-benchmarking/">link</a></p>
+<h2 id="lightnvm-linux-implementation-of-open-channel-SSD"><a href="#lightnvm-linux-implementation-of-open-channel-SSD" class="headerlink" title="lightnvm, linux implementation of open channel SSD"></a>lightnvm, linux implementation of open channel SSD</h2><p>links: </p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://lightnvm.io/">http://lightnvm.io/</a></li>
+<li><a target="_blank" rel="noopener" href="https://openchannelssd.readthedocs.io/en/latest/">https://openchannelssd.readthedocs.io/en/latest/</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/bjorling">https://www.usenix.org/conference/fast17/technical-sessions/presentation/bjorling</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.ithome.com.tw/news/122307">https://www.ithome.com.tw/news/122307</a></li>
+</ul>
+<h2 id="The-Myth-of-HDD-Endurance"><a href="#The-Myth-of-HDD-Endurance" class="headerlink" title="The Myth of HDD Endurance"></a>The Myth of HDD Endurance</h2><p><a target="_blank" rel="noopener" href="https://www.micron.com/about/blog/2016/february/the-myth-of-hdd-endurance">https://www.micron.com/about/blog/2016/february/the-myth-of-hdd-endurance</a></p>
+<h2 id="快閃記憶體的路線之爭"><a href="#快閃記憶體的路線之爭" class="headerlink" title="快閃記憶體的路線之爭"></a>快閃記憶體的路線之爭</h2><p><a target="_blank" rel="noopener" href="https://www.digitimes.com.tw/col/article.asp?id=717">https://www.digitimes.com.tw/col/article.asp?id=717</a></p>
+</div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>SSD笔记-第二篇SSD结构与性能评估概述</p><p><span>文章作者：</span>王二</p><p><span>发布时间：</span>2024-09-22</p><p><span>最后更新：</span>2024-11-06</p><p><span>原始链接：</span><a href="/ssd-notes-02/">https://wanger-sjtu.github.io/ssd-notes-02/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="https://wanger-sjtu.github.io/ssd-notes-02/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 BY-NC-SA 许可协议。转载请注明出处！</p></div><br><div class="tags"><ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/ssd/" rel="tag">ssd</a></li></ul></div><div class="post-nav"><a class="pre" href="/ssd-notes-03/">ssd_notes_03</a><a class="next" href="/ssd-notes-01/">SSD笔记- 第一篇引言</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: '25c52264eb62b88a09d0',
+  clientSecret: '08dd790dcadb5826a40004b55e56414d2f477734',
+  repo: 'wanger-sjtu.github.io',
+  owner: 'wanger-sjtu',
+  admin: ['wanger-sjtu'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="https://wanger-sjtu.github.io"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="关于"><img class="nofancybox" src="/img/avatar.jpg"/></a><p>除了这只猪，还没见过谁敢于如此无视对生活的设置。</p><a class="info-icon" href="https://github.com/Wanger-SJTU" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/paper/">paper</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/python/">python</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%AB%9E%E5%88%86/">竞分</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%B0%E5%BD%95/">记录</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%97%B2%E8%81%8A/">闲聊</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/%E4%BD%93%E7%B3%BB%E7%BB%93%E6%9E%84/" style="font-size: 15px;">体系结构</a> <a href="/tags/TVM/" style="font-size: 15px;">TVM</a> <a href="/tags/ANN/" style="font-size: 15px;">ANN</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/ANNs/" style="font-size: 15px;">ANNs</a> <a href="/tags/CPU/" style="font-size: 15px;">CPU</a> <a href="/tags/LLM/" style="font-size: 15px;">LLM</a> <a href="/tags/SD/" style="font-size: 15px;">SD</a> <a href="/tags/shell/" style="font-size: 15px;">shell</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/Deep-Learning/" style="font-size: 15px;">Deep Learning</a> <a href="/tags/RAG/" style="font-size: 15px;">RAG</a> <a href="/tags/CPP/" style="font-size: 15px;">CPP</a> <a href="/tags/CI/" style="font-size: 15px;">CI</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/constexpr/" style="font-size: 15px;">constexpr</a> <a href="/tags/cuda/" style="font-size: 15px;">cuda</a> <a href="/tags/lecture/" style="font-size: 15px;">lecture</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/DL/" style="font-size: 15px;">DL</a> <a href="/tags/%E6%95%B0%E5%80%BC%E7%B2%BE%E5%BA%A6/" style="font-size: 15px;">数值精度</a> <a href="/tags/%E6%8A%80%E6%9C%AF/" style="font-size: 15px;">技术</a> <a href="/tags/%E7%AB%9E%E5%88%86/" style="font-size: 15px;">竞分</a> <a href="/tags/NDK/" style="font-size: 15px;">NDK</a> <a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/ssd/" style="font-size: 15px;">ssd</a> <a href="/tags/%E5%AD%A6%E4%B9%A0/" style="font-size: 15px;">学习</a> <a href="/tags/vecdb/" style="font-size: 15px;">vecdb</a> <a href="/tags/%E7%88%AC%E8%99%AB/" style="font-size: 15px;">爬虫</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-06/">SSD筆記 - 第六篇 結論</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-05/">SSD筆記 - 第五篇 access pattern, 系統配置</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-04/">SSD筆記 - 第四篇 FTL 其他功能及平行機制</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-03/">ssd_notes_03</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-02/">SSD笔记-第二篇SSD结构与性能评估概述</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-01/">SSD笔记- 第一篇引言</a></li><li class="post-list-item"><a class="post-list-link" href="/fp16-err/">fp16 的累加误差有多大</a></li><li class="post-list-item"><a class="post-list-link" href="/cuda-mode-1/">cuda_mode_1</a></li><li class="post-list-item"><a class="post-list-link" href="/llm-sparse/">端侧 LLM 的PD分离技术之稀疏性</a></li><li class="post-list-item"><a class="post-list-link" href="/fast-dequant/">Nvidia 的快速反量化操作</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2024 <a href="/." rel="nofollow">一只特立独行的猪.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>

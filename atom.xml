@@ -1,0 +1,529 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>一只特立独行的猪</title>
+  
+  <subtitle>既然我存在，就不能装作不存在</subtitle>
+  <link href="https://wanger-sjtu.github.io/atom.xml" rel="self"/>
+  
+  <link href="https://wanger-sjtu.github.io/"/>
+  <updated>2024-11-06T14:07:20.578Z</updated>
+  <id>https://wanger-sjtu.github.io/</id>
+  
+  <author>
+    <name>王二</name>
+    
+  </author>
+  
+  <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>SSD筆記 - 第六篇 結論</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-06/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-06/</id>
+    <published>2024-09-22T13:30:31.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="前情提要"><a href="#前情提要" class="headerlink" title="前情提要"></a>前情提要</h1><p>第六篇，這篇就是把五篇的重點做個摘錄。</p><h2 id="基礎"><a href="#基礎" class="headerlink" title="基礎"></a>基礎</h2><ol><li>SSD（solid state drive) 是基於 flash NAND memory 製作的儲存裝置。資料（Bits)儲存在不同種類的 cell 裡，當時有 SLC, MLC, TLC，分別代表一個 cell 裡面可存 1, 2, 3 個 bit(s)，並有不同的讀寫時間、壽命等特性。</li><li>每個 Cell 有 P&#x2F;E (Program&#x2F;Erase) cycles 次數限制，超過了該 Cell 就不能用了。意味著 SSD 裝置會隨著使用過程損耗、有“可預期”的使用年限。</li><li>效能評定 (Benchmarking) 很難做。原廠及第三方的報告都要多看多比較，別輕易相信他們的數字。可以的話自己買了做一次效能測試。並確定你了解效能指標的意義，且該數據有達到你的需求。</li></ol><h2 id="Pages-and-blocks"><a href="#Pages-and-blocks" class="headerlink" title="Pages and blocks"></a>Pages and blocks</h2><ol><li><p>鄰近的cell會再組成可被讀寫的最小單位 page, nand-flash 的 page&#x2F;分頁 大小 2, 4, 8, 16 KB 不等。 鄰近的 page 則會組成 block，通常是 128, 256 個 page 為一 block，因而 block 大小有 256 KB 到 4MB 不等。如 Sxxsung SSD 840 block &#x3D; 2048 KB, 由 256 個 8 KB page 組成。</p></li><li><p>即便你只在作業系統讀了一個 byte，SSD 的低消還是要讀一個 page。</p></li><li><p>寫入&#x2F;write 一個 page 也稱為 program，上面提到的為寫一點資料要寫一堆的現象也稱為 write amplification &#x2F; 寫入放大。</p></li><li><p>page 不能直接被複寫。nand-flash 只有在進入 “free” state 才能被寫。在我們寫入一筆資料的時候我們需要先讀出現有內容到暫存器&#x2F;register，然後再寫到其他的 free 的 page 裡，原先的 page 會被進入 “stale” state，並等待被清理，這種操作模式稱為 “copy-modify-write”</p><blockquote><p>zfs 以及一些作業系統也有類似的術語 <a href="https://en.wikipedia.org/wiki/Copy-on-write">copy-on-write</a>，沒什麼相關就是了。</p></blockquote></li><li><p>erase 必須以 block 為單位 (Erases are aligned on block size):<br>page stale 之後必須要清除&#x2F;erase 才能回到 free 狀態</p></li></ol><h2 id="SSD-控制器與其原理"><a href="#SSD-控制器與其原理" class="headerlink" title="SSD 控制器與其原理"></a>SSD 控制器與其原理</h2><ol><li><p>FTL Flash Translation layer<br>FTL 是 SSD controller 工作之一，負責把 host interface 的 Logical Block Addresses (LBA) 轉 Physical Block Addresses (PBA)。最近很多 controller 實作 hybrid log-block mapping，讓隨機寫入的行為像是 log-structured file systems ，寫入行為像是 循序寫入 (sequential write)。</p></li><li><p>internel parallelism<br>controller 內有同時寫入許多 block 到不同的 nand-flash 晶片的機制，此寫入機制&#x2F;單位 clustered block。</p></li><li><p>Wear leveling<br>FTL 的一個功能是讓各個 block 的 P&#x2F;E cycle 接近，大家約在同個時間壞掉。</p></li><li><p>GC &#x2F; Garbage collection 處理垃圾<br>controller 的 GC 流程會把 stale page 清除，回到 free state, 以備下次資料寫入。</p></li><li><p>background&#x2F; 背景作業的 GC 會影響前台 (foreground) 的寫入效能</p></li></ol><h2 id="建議的-SSD-操作姿勢"><a href="#建議的-SSD-操作姿勢" class="headerlink" title="建議的 SSD 操作姿勢"></a>建議的 SSD 操作姿勢</h2><ol><li><p>避免多次寫入小於 page size 的資料。避免 read-modify-write, write amplification. page size 愈大愈好</p></li><li><p>align write, 盡量寫入以 page size 為單位的資料</p></li><li><p>為提升 throughput 盡量把小的寫入 cache 到記憶體，在適當實際一次批次寫入。</p><blockquote><p>這個應該是設計資料庫或是有極端效能考量的系統時的需求</p></blockquote></li><li><p>讀取效率跟寫入行為有關，當我們批次寫入資料時 SSD controller 會把資料平行寫入、四散在各個 nand flash chip 之間。寫入資料時將日後可能會一起讀取的資料排在一起寫會有助於讀取效能</p><blockquote><p>感覺有點難，所以規劃架構的時候用 VM 來區分各個應用程式，如資料庫、web server 分離可以較有效運用到這點。 你說 docker, k8s container? 可能也有吧… 我不太確定(TODO)</p></blockquote></li><li><p>讀寫分離<br>當我們在 SSD 上進行大量小的讀寫穿插 (interleaved) 的操作時會讓 controller 內有的 cache, readahead 機制失效，效能低落。例如如果你有 1000 個 檔案需要讀寫，一個個讀寫跟一次讀 1000 個完了以後再寫，後者效能較好。 </p><blockquote><p>zfs 也有 zil, l2arc 讀寫 cache 分離的機制。  “the L2ARC for random reads, and the ZIL for writes.” [2](#zfs cache-l2arc)</p></blockquote></li><li><p>當你要刪資料的時候最好是批次、一次性刪，好讓 controller GC 有更多空間可以操作，降低 SSD 內部資料碎片化 fragmentation。</p></li><li><p>隨機寫入不一定比循序寫入慢<br>寫入的檔案小的時候會慢，但檔案跟 clustered block 同大時可以利用到 ssd 內部的平行機制，效能跟 sequential weite 差不多好</p></li><li><p>單執行緒、一次讀很多資料的操作比同時跑很多 thread 的讀取操作更能利用到 readahead 的機制。因為有可能 LBA 剛好都在同個 flash chip，還是要排隊才能拿到資料。很多時候反而單執行緒讀取可以更好的運用到 readahead buffer</p></li><li><p>寫入情況同上面一條，single threaded large write is better</p></li><li><p>如果大量小的資料沒辦法批次或是快取寫入的操作，那還是用多執行緒來寫</p></li><li><p>冷熱分離<br>常改的資料（熱的）放在一起，因為 read-modify-write 特性的關係，冷資料會跟熱的混在一塊，wear leveling 也會一起做，盡可能分開兩類資料能讓 GC 更好做事。</p></li><li><p>熱資料、常改的 metadata 最好有做緩存(buffered) cache 在記憶體裡，並避免寫到 SSD 裡。</p></li></ol><h2 id="系統最佳化"><a href="#系統最佳化" class="headerlink" title="系統最佳化"></a>系統最佳化</h2><ol><li><p>PCI Express, 企業級的 SAS 比 SATA 效能好，host interface 先天限制。</p><blockquote><p>可是最近 HPE SAS <a href="ttps://blocksandfiles.com/2019/11/25/hpe-issues-firmware-fix-to-to-stop-ssd-failure/">爆了一次</a></p></blockquote></li><li><p>Over-provisioning 分割硬碟的時候別把空間全用完，例如留 10~15% 給 GC 運作空間可以提升使用壽命，controller 還是會把那個空間拿來做 wear leveling 等事。如果有更大量寫入需求可以考慮拉大到 25 %</p></li><li><p>開啟 trim 指令，作業系統核心、檔案系統可以通知 SSD controller 某個 block 沒在用，讓 controller 進行 GC 作業。</p></li><li><p>align the partition<br>確定硬碟格式化時確定分割區與 實體 page 的位置有對齊很重要 <a href="https://tytso.livejournal.com/2009/02/20/">ref</a></p></li></ol><h1 id="結論"><a href="#結論" class="headerlink" title="結論"></a>結論</h1><p>想了解更多的話，作者建議可以再去看 2-5 的參考資料。另外 FAST conference（USENIX conference on file and storage) 也可以看看，了解時事動態。</p><h1 id="參考資料"><a href="#參考資料" class="headerlink" title="參考資料"></a>參考資料</h1><h4 id="coding-for-ssd-part6"><a href="#coding-for-ssd-part6" class="headerlink" title="coding for ssd part6"></a>coding for ssd part6</h4><p><a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-6-a-summary-what-every-programmer-should-know-about-solid-state-drives/">http://codecapsule.com/2014/02/12/coding-for-ssds-part-6-a-summary-what-every-programmer-should-know-about-solid-state-drives/</a></p><h4 id="zfs-cache-l2arc"><a href="#zfs-cache-l2arc" class="headerlink" title="zfs cache-l2arc"></a>zfs cache-l2arc</h4><p><a href="http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html">http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;前情提要&quot;&gt;&lt;a href=&quot;#前情提要&quot; class=&quot;headerlink&quot; title=&quot;前情提要&quot;&gt;&lt;/a&gt;前情提要&lt;/h1&gt;&lt;p&gt;第六篇，這篇就是把五篇的重點做個摘錄。&lt;/p&gt;
+&lt;h2 id=&quot;基礎&quot;&gt;&lt;a href=&quot;#基礎&quot; class=&quot;heade</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>SSD筆記 - 第五篇 access pattern, 系統配置</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-05/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-05/</id>
+    <published>2024-09-22T13:29:20.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="前情提要"><a href="#前情提要" class="headerlink" title="前情提要"></a>前情提要</h1><p>作者在介紹了 SSD 內部運作原理後，為何同時 (concurrent) 進行的讀寫行為會互相干涉，並介紹如何更好的 SSD 讀寫手法。此篇也涵蓋了一部分可改善效能的檔案系統最佳化手段。</p><h1 id="7-Access-Patterns"><a href="#7-Access-Patterns" class="headerlink" title="7 Access Patterns"></a>7 Access Patterns</h1><h2 id="7-1-定義循序及隨機-IO-操作"><a href="#7-1-定義循序及隨機-IO-操作" class="headerlink" title="7.1 定義循序及隨機 IO 操作"></a>7.1 定義循序及隨機 IO 操作</h2><p>Sequential&#x2F;循序：一個 IO 操作的 LBA &#x2F; Logical block address 開頭接著上一個操作 LBA 的結尾。除此之外皆視為隨機。<br>值得注意的是即便我們 LBA 是連續的，經過 FTL 之後實際存在 physical block 的資料還是可能會四散各處。</p><h2 id="7-2-寫"><a href="#7-2-寫" class="headerlink" title="7.2 寫"></a>7.2 寫</h2><p>效能評定報告及廠商規格通常會顯示循序寫入速度慢於隨機寫入。<br>但作者這類資料是用小於 clustered block size 的資料量（&lt; 32 MB)的測試，沒用到平行機制。如果大於還剛好是倍數，寫入的效能是可以比擬的。作者的解釋是 parallelism 跟 interleaving 同時上場，也就是寫入一個 clustered block 可以保證 SSD 完全用上了設計好的機制。下兩圖分別是從 <a href="#ref">[2, 8]</a> 擷取出來，隨機寫入效率跟循序寫入在寫入資料大小跟 clustered block 差不多大的時候是差不多的（大約是 16&#x2F;32 MB)。<br><img src="http://codecapsule.com/wp-content/uploads/2014/01/writes-random-01.jpg" alt="隨機跟循序寫入比較"><br><img src="http://codecapsule.com/wp-content/uploads/2014/01/writes-random-02.jpg"></p><p>然而當隨機寫入小於 page size 如 16 KB 的資料時，除了寫入放大，SSD 工作量也會變多，例如必須要把每一筆 LBA 對應的 PBA mapping 都記錄下來，而許多 FTL 用類似 tree 之類的資料結構來存，很多的小資料寫入會變成對 FTL RAM 的大量更新操作，而且這個 mapping table 必須在斷電後留存 &#x2F; persisted ，結果就是同時帶來對 nand block 的大量寫入 <a href="#ref">[1, 5]</a>。 循序寫入可以降低此類更新 metadata 的情形發生，減少對 flash 的寫入。</p><p>隨機大量小資還會造成大量 copy-erase-write 的現象發生。相較 循序寫入至少一個 block 大小的資料的情況，switch merge 等 happy path 更容易在後者發生。隨機大量小資還會讓 stale page 四散在各個 block，而不是集中在某個區域。這現象也稱為 internel fragmentation，造成 cleaning efficiency &#x2F; 清掃效率降低， GC 需要搬動更多次資料來清除一樣大的空間。</p><p>至於應用層關心的 concurrency ， 單執行緒的大筆資料寫入與多執行緒的同步多筆寫入差不多快，而且前者較能利用到 SSD 的平行處理機制，因此費工夫寫多執行緒的寫入並不會對 IO 的效能有幫助<a href="#ref">[1,5]</a>，反而有害<a href="#ref">[3, 26, 27]</a>。</p><blockquote><p>但是作者最後備註還是寫了如果你沒辦法把隨機大量小資做緩存批次寫入，還是用多執行緒會比較快。</p></blockquote><h2 id="7-3-讀"><a href="#7-3-讀" class="headerlink" title="7.3 讀"></a>7.3 讀</h2><p>總的來說，讀比寫快。但循序跟隨機讀取孰快孰慢，不一定。FTL 在寫入時動態的&#x2F; dynamically 將 LBA 寫到 PBA 去，其中更涉及上述的平行機制，資料切塊寫到各個 channel&#x2F;package 去，這個寫入模式也稱為 “write-order-based” <a href="#ref">[3]</a>。如果讀取的順序完全隨機，跟寫入模式無相關，則讀取時先前以平行機制寫入的資料不保證在讀取時有用。很多時候即便 LBA 是連續的，讀取效能也不一定好，甚至連續的 LBA 讀取被 mapping 到同一個 channel 上，還是要排隊等資料。作者提到 Acunu <a href="#ref">[47]</a> 有篇 blog 測試發現讀取資料的模式與寫入的模式有直接關聯。</p><blockquote><p>[47] 的 Acunu 網站已經掛了。[TODO]: 找替代方案</p></blockquote><p>讀取效能與寫入模式息息相關，作者建議相關聯的資料最好寫在同個 page &#x2F; block &#x2F; clustered block 裡，確保寫入時用到平行機制，相關聯資料放一起也較符合日後讀取需求與效能提升條件。</p><p>下圖是 2 channels, 4 chips, 1 plane&#x2F;chip 的參考配置圖。注意通常一個 chip 裡面不只有一個 plane，作者做了些簡化以便說明。大寫的英文字分別代表一筆 NAND-flash block 大小的資料。這裡我們寫入四筆連續的 LBA 資料 <code>[A, B, C, D]</code>，剛好也是 clustered block 的大小。利用 clustered block 平行機制(parallelism and interleaving)這四筆資料會被分開寫到四個 plane 去。即便他們在 logical address 是連續的，為了效能考量他們會被分到不同的 physical plane。</p><p>write-order-based FTL 在選擇寫入 clustered block 的時候不會要求在各 plane 的 PBN 要相同，所以圖例可以看到 結果寫到了 1, 23, 11, 51 這四個位置去。</p><blockquote><p>我不太確定作者提這個用意為何，先前他也沒有介紹 plane 的設計細節 XD</p></blockquote><p>當我們讀取 <code>[A, B, E, F]</code>, <code>[A, B, G, H]</code> 的時候，前者因為部分資料在同個 plane 裡，需要讀兩次，後者則可利用到平行機制加快讀取。</p><p><img src="http://codecapsule.com/wp-content/uploads/2014/02/ssd-exploiting-parallelism.jpg"></p><p>這會直接影響到內部平行機制對應用層讀取資料。因為資料可能剛好在同個 physical channel ，當用多執行緒進行讀取不一定能帶來效能提升。另外在 <a href="#ref">[3]</a> 也指出多執行緒的讀取會干擾 readahead (prefetchiing buffer) 的運行。</p><blockquote><p>類似 FTL 會先猜你接下來要讀的資料，先抓好放著。</p></blockquote><p>雖然 SSD 廠商通常不公開 page&#x2F;block&#x2F;clustered block 大小，但是透過基本的測試工具可以抓出個大概。<a href="#ref">[2, 3]</a>這些資訊可以用來作為最佳化讀&#x2F;寫暫存區的大小，並當作分割硬碟的參考依據。</p><h2 id="7-4-同時-concurrent-讀寫"><a href="#7-4-同時-concurrent-讀寫" class="headerlink" title="7.4 同時&#x2F;concurrent 讀寫"></a>7.4 同時&#x2F;concurrent 讀寫</h2><p><a href="#ref">[1, 3]</a> 提到交錯讀寫對效能的負面影響，主要是因為讀寫操作同時進行會競爭資源、妨礙 SSD 內部快取、readahead 的運作。<br>因此作者建議將讀寫活動分開，如果你有 1000 個檔案需要頻繁讀寫，建議一次讀完再一次寫入，而不是讀了又寫讀了又寫讀了又寫…</p><h1 id="8-系統最佳化"><a href="#8-系統最佳化" class="headerlink" title="8. 系統最佳化"></a>8. 系統最佳化</h1><h2 id="8-1-Partition-alignment"><a href="#8-1-Partition-alignment" class="headerlink" title="8.1 Partition alignment"></a>8.1 Partition alignment</h2><p>3.1 提到當除了寫入資料大小是 page 大小倍數之外，寫入位置也要對，否則還是會佔了兩個 physical page。<a href="#ref">[53]</a><br><img src="http://blog.nuclex-games.com/wp-content/uploads/2009/12/ssd-unaligned-write.png" alt="from [53]"><br>因此了解 SSD 的 NAND page 大小是很重要滴，想知道如何正確的分割硬碟，可以參考 <a href="#ref">[54,55]</a></p><blockquote><p>[54] 壞了<br>Google 搜尋也可以找到 SSD 型號的相關資料，即便找不到你也可以試著用逆向工程的做法來隔空抓藥<a href="#ref">[2,3]</a>。</p></blockquote><p>[[43]] 的結果顯示正確的分割磁區對效能有幫助。另外 <a href="#ref">[44]</a> 也指出跳過&#x2F;by-passing 檔案系統，直接對硬碟下指令對效能有些微幫助。</p><blockquote></blockquote><h2 id="8-2-檔案系統參數"><a href="#8-2-檔案系統參數" class="headerlink" title="8.2 檔案系統參數"></a>8.2 檔案系統參數</h2><p>5.1 及 <a href="#ref">[16]</a> 提到的 TRIM 需要從 <code>discard</code> 指令開啟。除此之外拿掉 <code>relatime</code>, 加入 <code>noatime, nodiratime</code> 可能也有幫助。 <a href="#ref">[40, 55, 56, 57]</a></p><h2 id="8-3-Operating-system-I-O-scheduler"><a href="#8-3-Operating-system-I-O-scheduler" class="headerlink" title="8.3 Operating system I&#x2F;O scheduler"></a>8.3 Operating system I&#x2F;O scheduler</h2><p>CFQ scheduler (Completely Fair Queuing) 是 linux 預設的 scheduler，他會把 LBA 相近的 IO 放在一起執行，降低 seek 操作的延遲。這種安排對沒有那些會動機構的 SSD 來說並非必要。<a href="#ref">[56, 58]</a> 以及其他許多的擁護者都建議從 CFQ 換成 NOOP 排程。但從 linux kernel 3.1 開始 CFQ 也有對 SSD 的一些最佳化 <a href="#ref">[59]</a>，另外許多效能評定也指出排程器&#x2F;scheduler 的效能與搭配的應用層負載及硬碟本身都有關係 <a href="#ref">[40, 60, 61, 62]</a>。<br>作者認為除非你的應用層模式固定、並且更改 scheduler 確定有幫助，否則建議還是用預設的 CFQ。</p><h2 id="8-4-Swap"><a href="#8-4-Swap" class="headerlink" title="8.4 Swap"></a>8.4 Swap</h2><p>swap 把虛擬記憶體 page 寫入硬碟時會帶來大量的 IO 請求，會大幅降低 SSD 壽命。 linux kernel 有個 <code>vm.swappiness</code> 可以設定寫入 swap 的頻率 0-100 由少到多。Ubuntu 的預設是 60，建議設 0 來避免不必要的 swap，提升 SSD 使用年限。另外也有人建議設成 1 ，作者認為基本上是一樣的。<a href="#ref">[56, 63, 57, 58]</a><br>另外也可以用 RAM disk 來做 swap，或是就別用 swap 了。</p><blockquote><p>有點不太懂拿 ramdisk 來做 swap 的意義…</p></blockquote><h2 id="8-5-Temporary-files"><a href="#8-5-Temporary-files" class="headerlink" title="8.5 Temporary files"></a>8.5 Temporary files</h2><p>暫存檔不需要被保存下來，寫到 SSD 去是浪費 P&#x2F;E cycle 建議可以用 tmpfs，保存在記憶體即可。 <a href="#ref">[56, 57, 58]</a></p><h1 id="ref"><a href="#ref" class="headerlink" title="ref"></a>ref</h1><h4 id="coding-for-ssd-part-5"><a href="#coding-for-ssd-part-5" class="headerlink" title="coding for ssd part 5"></a>coding for ssd part 5</h4><p><a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-5-access-patterns-and-system-optimizations/">http://codecapsule.com/2014/02/12/coding-for-ssds-part-5-access-patterns-and-system-optimizations/</a></p><p>其他有編號參考資料請至原文觀賞：<a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-3-pages-blocks-and-the-flash-translation-layer/#ref">link</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;前情提要&quot;&gt;&lt;a href=&quot;#前情提要&quot; class=&quot;headerlink&quot; title=&quot;前情提要&quot;&gt;&lt;/a&gt;前情提要&lt;/h1&gt;&lt;p&gt;作者在介紹了 SSD 內部運作原理後，為何同時 (concurrent) 進行的讀寫行為會互相干涉，並介紹如何更好的 SSD</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>SSD筆記 - 第四篇 FTL 其他功能及平行機制</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-04/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-04/</id>
+    <published>2024-09-22T13:28:36.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="前情提要"><a href="#前情提要" class="headerlink" title="前情提要"></a>前情提要</h1><p>在了解 FTL 之後，這裡將對 TRIM, over-provisioning 作介紹，並探討 clustered block 以及 SSD 不同層級的平行機制。</p><h1 id="5-Advanced-functionalities"><a href="#5-Advanced-functionalities" class="headerlink" title="5 Advanced functionalities"></a>5 Advanced functionalities</h1><h2 id="5-1-TRIM"><a href="#5-1-TRIM" class="headerlink" title="5.1 TRIM"></a>5.1 TRIM</h2><p>依照 HDD 的慣例，檔案系統刪除資料時不一定要真的下抹除指令到硬碟去（真的要刪的時候只要直接複寫過去就好了）。造成可能有檔案系統回報硬碟是空的、裡面塞滿實質 stale 的資料但 controller 不知情的情況。這會造成 controller 沒法有效 GC，到了發現要複寫了才開始清出空間，最後導致效能低落。</p><p>另外一個問題是，controller 快樂的把那些 controller 應該知道要刪除的資料搬來搬去做 wear leveling，但是這些都是做白工，而且干擾了 foreground 的讀寫工作。</p><blockquote><p>有沒有跟職場環境有點像？</p></blockquote><p>對這個問題的一個解法是 TRIM 指令，由作業系統送出，告知 SSD controller 某些 page 已經被刪掉了，沒有留存在 logical space 的必要。有了這個資訊 SSD 就不用把那些 page 搬來搬去，並適時刪除。這個指令必須要在 SSD controller, 作業系統, 檔案系統都有支援的情況下才有用。</p><p>維基百科的 TRIM 頁面有列出支援的作業系統及檔案系統<a href="#ref">[16]</a>，</p><blockquote><p>關心 zfs 的人，freeBSD 9.2 及近期的 <a href="https://www.phoronix.com/scan.php?page=news_item&px=ZFS-On-Linux-TRIM-Lands">zfsOnLinux 8.0</a> 都有支援 TRIM，愈來愈適合裝在筆電上啦。</p></blockquote><p>5.2 Over-provisioning<br>透過提供更多備用的 physical block 來讓 SSD gc 更好做事、提升壽命。大部分的 SSD 都有將 7 ~ 25% 的空間做 over-provisioning<a href="#ref">[13]</a>。使用者也可以加碼在分割硬碟的時候留更多空間，例如 100 GB 的硬碟，切了 90 GB 來用，其他擺著，controller 一樣會把那些空間拿來做 GC 等用途。</p><p>AnandTech 的一篇關於 over-provisioning 的文章，建議除了製造商原有的之外可以做到 25% 來達到更好的 SSD 存取效能<a href="#ref">[34]</a>。另外一篇 Percona 的文章指出 Intel 320 SSD 在將滿時寫入效能低落的現象<a href="#ref">[38]</a>。</p><p>作者對這現象的解釋是如果 SSD controller 始終保持在忙碌狀態，就會找不到適當實際進行 GC，清出 free state 的 block，直到 free block 用完了才不得不做。在這時候 FTL 已經無法像先前那樣有效率的完成 foreground 讀寫操作，必須等 GC 清出空間才能做，這導致嚴重的效能下降。 over-provisioning 可以協助減緩此類現象的發生，讓 FTL 有更多的空間支應大量的寫入操作。至於需要多大的空間來做，作者建議如果需要因應尖峰時段大量隨機寫入，上看25%，不需要的話 10 ~ 15%即可。</p><h1 id="5-3-Secure-Erase"><a href="#5-3-Secure-Erase" class="headerlink" title="5.3 Secure Erase"></a>5.3 Secure Erase</h1><p>有部分型號提供 ATA Secure Erase 功能可以讓 SSD 所有 block 清為 free，清空各 FTL mapping table。這可以解決資訊安全及使 SSD 效能恢復至出廠狀態。不過 <a href="#ref">[11]</a> 提到很多大部分廠商的實作都有問題。 Stackoverflow 上面有對於資訊安全議題的相關討論，也可以看到如何更有效的把資料確實從 SSD 上抹除，也有一篇 <a href="https://www.usenix.org/legacy/events/fast11/tech/full_papers/Wei.pdf">paper</a> 在討論這件事，，原則上就是挑選有支援加密的型號，或是你直接用有加密的檔案系統。 <a href="#ref">[48, 49]</a></p><blockquote><p>還有把硬碟丟到調理機裡面</p></blockquote><h1 id="5-4-Native-Command-Queueing-NCQ"><a href="#5-4-Native-Command-Queueing-NCQ" class="headerlink" title="5.4 Native Command Queueing (NCQ)"></a>5.4 Native Command Queueing (NCQ)</h1><p>SATA 讓 SSD 可以批次接受多個指令，利用內部平行處理機制的功能<a href="#ref">[3]</a>。除了降低延遲之外，部分 controller 也提供此機制讓 host CPU 可以批次下指令，當 CPU 工作量大的時候有幫助 <a href="#ref">[39]</a></p><h2 id="5-5-斷電保護"><a href="#5-5-斷電保護" class="headerlink" title="5.5 斷電保護"></a>5.5 斷電保護</h2><p>部分實作利用 supercapacitor 來保持 SSD 在斷電之後仍有足夠能量完成 host bus 的指令。不過作者指出這個跟 Secure Erase 一樣，各家實作不同，也沒有統一規範。</p><p><a href="#ref">[72]</a> Zheng et al., 2013 在斷電壓力測試中測了 15 款 SSD，沒透露廠家，但掉資料、系統損毀的比例 13&#x2F;15。另外一位 Luke Kenneth Casson Leighton 也拿了四款 SSD 來做測試，只有 Intel 沒掉資料 <a href="#ref">[73]</a>。</p><blockquote><p>如果是資訊機房的話還是要牢記備份 321 原則，還有上 UPS 跟自動關機機制。</p></blockquote><h1 id="6-SSD-內部平行處理機制"><a href="#6-SSD-內部平行處理機制" class="headerlink" title="6. SSD 內部平行處理機制"></a>6. SSD 內部平行處理機制</h1><h2 id="6-1-有限的-IO-頻寬"><a href="#6-1-有限的-IO-頻寬" class="headerlink" title="6.1 有限的 IO 頻寬"></a>6.1 有限的 IO 頻寬</h2><p>因 nand flash 物理限制，單一 package 的 io 頻寬極限是在 32-40 MB <a href="#ref">[5]</a>。因此能提升存取效能的方法就是 parallelized&#x2F;平行化 或是 interleaved 解釋可見 <a href="http://csl.skku.edu/papers/CS-TR-2010-329.pdf">[2]</a>的 2.2。</p><blockquote><p>interleved 類似 pipelined </p></blockquote><p>藉由結合不同層級的內部平行處理機制，SSD 可以同時 simutaneously  存取多個 block，又稱 clustered block. 作者建議想了解細節的人去看 <a href="#ref">[2, 3]</a>，進階指令如 copyback, inter-plane transfer 可參考 <a href="#ref">[5]</a>。</p><h2 id="6-2-不同層級的平行機制"><a href="#6-2-不同層級的平行機制" class="headerlink" title="6.2 不同層級的平行機制"></a>6.2 不同層級的平行機制</h2><p><img src="http://codecapsule.com/wp-content/uploads/2014/02/ssd-package.jpg"><br>上圖為 nand flash 的內部結構，所謂的層級即是 channel, package, chip, plane, block, 到 page ，以離 controller 的距離來做分級。</p><ul><li>Channel-level parallelism.<br>controller 與 package 透過多個 channel 溝通，各channel 可被獨立運用，也可同步使用，各個 channgel 由多個 package 共用。</li><li>Package-level parallelism.<br>在同個 channel 上的 package 可以被同時存取，上面提到的 interleaving 可以用在同 channel 的 package 上。</li><li>Chip-level parallelism.<br>一個 package 裡有兩個以上的 die&#x2F;chip 可被平行存取。</li><li>Plane-level parallelism.<br>一個 chip 裡面有兩個以上的 plane, 同個指令（讀寫抹）可同時下在 chip 的各 plane 上。plane 裡面有 block, block 裡面有 page。plane 裡面還有一些暫存器（小的 RAM 緩存區），用來協助 plane 層級的操作。</li></ul><h1 id="6-3-Clustered-blocks"><a href="#6-3-Clustered-blocks" class="headerlink" title="6.3 Clustered blocks"></a>6.3 Clustered blocks</h1><p>對分布在不同 chip 的多個 block 的操作也稱為 clustered block <a href="#ref">[2]</a>. 跟 HDD raid 的 striping 概念有點像 <a href="#ref">[1, 5]</a>.</p><p>批次對 LBA 的存取會被視為 clustered 操作，並同時對不同的 flash package 做存取。多虧了 FTL 的 mapping 演算法&#x2F;資料結構，即便我們不是做循序的讀寫，一樣可以發揮 FTL 平行運算的超能力。分散 block 到各個 channel 去讓我們的讀寫抹都可以平行處理。意味著當我們 IO 的大小是 clustered block 的倍數，並有把 LBA 對齊，將可充分利用 SSD 內部各層級的平行運作機制。下一篇的 8.2 8.3 有更多介紹</p><h1 id="ref"><a href="#ref" class="headerlink" title="ref"></a>ref</h1><ol start="0"><li><a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-4-advanced-functionalities-and-internal-parallelism/">coding for ssd part 4</a></li></ol><p>其他有編號參考資料請至原文觀賞：<a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-3-pages-blocks-and-the-flash-translation-layer/#ref">link</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;前情提要&quot;&gt;&lt;a href=&quot;#前情提要&quot; class=&quot;headerlink&quot; title=&quot;前情提要&quot;&gt;&lt;/a&gt;前情提要&lt;/h1&gt;&lt;p&gt;在了解 FTL 之後，這裡將對 TRIM, over-provisioning 作介紹，並探討 clustered bloc</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>ssd_notes_03</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-03/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-03/</id>
+    <published>2024-09-22T13:27:58.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="前情提要"><a href="#前情提要" class="headerlink" title="前情提要"></a>前情提要</h1><p>這篇主要介紹 SSD 的讀寫單位如 page、 block，以及寫入放大 (write amplification) 、 wear leveling 等 SSD 問題及設計。除此之外， Flash Translation Layer (FTL) 及其兩個主要功能 logical block mapping, garbage collection (gc)。也以 hybrid log-block mapping 設計當例子介紹 FTL 如何實際進行一個 flash 的寫入操作。</p><blockquote><p>如果是我的筆記會像這樣加註在 info 欄位。</p></blockquote><h1 id="3-SSD-的基本操作"><a href="#3-SSD-的基本操作" class="headerlink" title="3. SSD 的基本操作"></a>3. SSD 的基本操作</h1><h2 id="3-1-讀、寫、抹"><a href="#3-1-讀、寫、抹" class="headerlink" title="3.1 讀、寫、抹"></a>3.1 讀、寫、抹</h2><p>因為 nand flash 的物理特性， flash memory 存取時必須要遵循特定規則，如果我們了解這些特性對我們在最佳化資料結構設計時會有幫助。</p><ul><li>SSD 讀取以分頁 (page) 為基本單位，即便你只是要讀一個 byte，還是會回傳一個 page。</li><li>寫入也以 page 為單位，即便你只有寫入小量資料，實際進行物理寫入時 SSD 還是要寫一個 page，此類現象也稱為寫入放大。 write, program 在 SSD 期刊上指的是同一件事。</li><li>copy-modify-write: 已有資料的 page 不能被直接複寫，當需要更改 page 資料時，要不是寫在該 blcok 空白&#x2F;free 的 page 裡，然後把該 page 標示為 stale，或是將整個 block 複製到 mem 修改，再寫到其他空的 block 去。 stale 的 block 必須在其他時機點清空。</li><li>資料抹除必須以 block 為單位。一般使用者在讀寫資料時 SSD 不會實際把 stale 資料物理上抹除，SSD也只有進行 read&#x2F;write 操作。SSD 只在 GC 判斷需要清出空間時對 nand flash 執行抹除&#x2F;erase 指令。</li></ul><h2 id="3-2-寫入範例"><a href="#3-2-寫入範例" class="headerlink" title="3.2 寫入範例"></a>3.2 寫入範例</h2><p>圖中得 2 看到我們在寫入 x’ 的時候不是複寫 x，而是 free 的 page 1000-3。<br>3 則是 GC 的操作，把 1000 清為 free，原有資料放到另一個 block，並清除 stale page。<br><img src="http://codecapsule.com/wp-content/uploads/2014/02/ssd-writing-data.jpg" alt="寫入操作範例"></p><blockquote><p>這裡可以猜測 SSD controller 需要很多儲存 lba -&gt; pba 的資料結構.</p></blockquote><h2 id="3-3-寫入放大"><a href="#3-3-寫入放大" class="headerlink" title="3.3 寫入放大"></a>3.3 寫入放大</h2><p>寫入小於 page size 的資料會造成 write amplification 的空間浪費([13])[#ref], 寫入 1 B 變成 16 KB。此類寫入放大也會在後續 GC, wear leveling 中持續傳遞。我們也可能寫入一個 page 的資料量但是 address mapping 結果沒有對在 page 開始處，最後要用到兩個 page，並可能觸發 read-modify-write，讓效能變差<a href="#ref">[2, 5]</a>。</p><p>作者給了幾個建議：永遠不要寫入小於一個 page size 的資料，寫入的資料兩大小與 page size 成倍數為原則、小的大量寫入先做緩存再批次寫入。</p><h2 id="3-4-wear-leveling"><a href="#3-4-wear-leveling" class="headerlink" title="3.4 wear leveling"></a>3.4 wear leveling</h2><p>因為 SSD cell 有 P&#x2F;E life cycle 限制，如果我們一直都讀寫同個 block， cell 掛了，SSD 容量會隨著使用一直變少。 wear leveling 就是要讓使用次數平均分配到各個 block 去<a href="#ref">[12, 14]</a>。<br>為了做到 wear leveling, controller 在寫入時需要依 page 寫入次數來選擇，必要時也有可能將各個 block 的資料做調動，也是一種 write amplification。 block 管理就是在 wear leveling 跟 write amplification 之間做取捨。<br>SSD 製造商想出了各種方法來解決這類問題，讓我們繼續看下去。</p><blockquote><p>有點像在整理房間一樣，各個原則都有好有壞 XD。</p></blockquote><h1 id="4-Flash-Translation-Layer-FTL"><a href="#4-Flash-Translation-Layer-FTL" class="headerlink" title="4 Flash Translation Layer (FTL)"></a>4 Flash Translation Layer (FTL)</h1><h2 id="4-1-FTL-的必要性"><a href="#4-1-FTL-的必要性" class="headerlink" title="4.1 FTL 的必要性"></a>4.1 FTL 的必要性</h2><p>SSD 可以很快導入是因為他走 HDD 的 Logical Block Addresses (LBA) ，上層軟體&#x2F;檔案系統不用因為 SSD 做調整。 上面提到SSD 不如 HDD 各個 sector&#x2F;page 可以直接被複寫，所以 FTL 橫空出世來解決這個問題，把 SSD 操作細節藏起來，讓 host interface 依然只需要對不同的 LBA 做存取，不用管 copy-modify-write, level wearing 等事。</p><blockquote><p>amd64 與 x86 的演進感覺也是類似的關係，向後相容非常重要。誰跟你換個硬體&#x2F;架構就軟體全部重寫啊 XD。</p></blockquote><h2 id="4-2-LBA-to-PBA"><a href="#4-2-LBA-to-PBA" class="headerlink" title="4.2 LBA to PBA"></a>4.2 LBA to PBA</h2><p>controller 工作其一就是把 host interface 的 logical block address 轉physical address。這類資料結構通常是存成一個 table ，為了存取效率，這類資料會快取在 controller 的 memory 裡，並提供斷電保護。<a href="#ref">[1,5]</a></p><p>實作方法有 </p><ol><li><p>page level mapping，最有彈性。每個 page 都對應到各自的 physical page，缺點是需要更大的 ram 來存 mapping table，太貴。</p></li><li><p>為解決上述問題，block level mapping 節省 mapping table 的 ram。整個做法大幅降低了 mapping table ram 用量，但是每次寫入都需要寫入一個 block，面對大量小資寫入放大豈不崩潰<a href="#ref">[1,2]</a>。</p></li><li><p>上面的 page vs black 的戰爭就是空間換取時間之間的取捨。有些人開始說這樣不行，我全都要：有了混合的 log-block mapping ，面對小資寫入會先寫到 log 緩存區，log存到一定量再合併成 block 寫下去<a href="#ref">[9, 10]</a>。</p></li></ol><p>下圖是一個簡化版本的 hybrid log-glock FTL 實作。寫了四個 full page 大小的資料，Logical page # 5, 9 都對應到 logicl block number(LBN) 1，此時關聯到一個空的 physical block #1000。<br>一開始 log-block page mapping table 1、 block #1000 是空的，隨著寫入資料到 block 1000 的過程 physical page offset 會新增&#x2F;更新其對應位置。 #1000 也稱為 log block。</p><p><img src="http://codecapsule.com/wp-content/uploads/2014/02/ssd-hybrid-ftl.jpg" alt="又一張不知出處的圖"></p><p>當 log block #1000 寫滿了之後， controller 會將原有的 data block #3000 與 log block #1000 合併，寫到空的 data block #9000，此時 #9000 成了 data block。</p><p>值得注意的是這個方法消除了四個寫入 b’, d’, b’’, d’’ 可能帶來的寫入放大，而且合併 block 的時候，新的 block #9000 拿到的是新的資料  b’’, d’’.</p><p>最後讀取指令會看現在資料是在 log block 來回傳資料，若否則去查 data-block mapping table（圖左下方）</p><p>log-block 在我們剛好寫入完整的 block 的時候也可以直接省去跟 data block<br>合併的功夫，直接更改 data-block mapping table 的 metadata，並把原有的 data block 清空，更新為 log block。這類最佳化手段也稱為 switch-merge, swap-merge。</p><p>目前對 log-block 的研究很多：FAST (Fully Associative Sector Translation), superblock mapping, flexible group mapping <a href="#ref">[10]</a>。其他的 mapping 手法也有如 Mitsubishi algorithm, SSR <a href="#ref">[9]</a>。</p><blockquote><p>這類 hybrid log-block 的作法，作者說很像 <a href="https://en.wikipedia.org/wiki/Log-structured_file_system">log-sructured</a> 檔案系統，一個例子是 zfs。 自從 proxmox ve 開始接觸 zfs ，覺得他真的很好用… 從 ubuntu 19.10 開始可以直接把 rootfs 用 zfs 裝喔。</p></blockquote><h1 id="4-3-2014-業界狀況"><a href="#4-3-2014-業界狀況" class="headerlink" title="4.3 2014 業界狀況"></a>4.3 2014 業界狀況</h1><p>當時 wikipedia 有 70 間 SSD 廠商， 11 間有能力做 controller， 其中4 間有自有品牌（Intel, Samsung, …)，另外 7 間專做 controller 的公司佔了 90% 的市場銷量<a href="#ref">[64, 65]</a>。</p><blockquote><p>wiki 上 2019 年變成 12 家，而自有品牌的有 5 間 WD、Toshiba、Samsung、Intel、威盛電子。<br>台灣的 controller 廠商有 phison, slicon motion, VIA tech, realtek, jmicron</p></blockquote><p>作者不確定是哪幾間公司吃下這個市場，但他以 Pareto（80&#x2F;20） 法則猜應該是其中的兩三家，所以從除了自有品牌的 SSD，用同一個 controller 大概行為都會差不多。FTL 的實作對效能影響甚鉅，但是各家廠商也不會公開自己用了哪些方法實作。</p><p>作者對於了解或是逆向工程<a href="#ref">[3]</a> mapping schema 的實作對提升應用層程式的效能保持保留態度。畢竟市面上的 controller 廠商大多沒有開放實作細節，就算針對某個 policy 去調整程式設定更甚至你拿到原始碼，這套系統在其他 schema 或是其他廠牌下也不一定有更好的結果。唯一的例外可能是你在開發嵌入式系統，已經確定會用某廠商的晶片。</p><p>作者建議大抵上知道許多的 controller FTL 是實作 hybrid log block policy 就好了。然後盡量一次寫入至少一個 block size 的資料，通常會得到較好的結果。</p><h2 id="4-4-Garbage-Collection"><a href="#4-4-Garbage-Collection" class="headerlink" title="4.4 Garbage Collection"></a>4.4 Garbage Collection</h2><p>因為將 page 清為 free 的抹除(erase)指令 latency 較高(1500-3500 μs, 寫入 250-1500 μs)，大部分的 controller 會在閒暇時做 housekeeping，讓之後寫入作業變快<a href="#ref">[1]</a>，也有一些實作是在寫入時平行進行<a href="#ref">[13]</a>。</p><p>時常會遇到 foregound 頻繁小檔寫入影響 background，導致找不到時間做  GC 的情況。這時候TRIM command, over-provisioning 可以幫得上忙（下一篇會介紹）。</p><p>flash 還有一個特性是 read disturb，常讀一個 block 的資料會造成 flash 狀態改變，所以讀了一定次數以後也需要搬動 block <a href="#ref">[14]</a></p><p>另外當一個 page 裡面有不常改的 cold&#x2F;static data 及 hot&#x2F;dynamic data，hot data 的更動會讓他們一起被搬動，分開冷熱資料可以改善這類情況。（不過冷的資料放久了還是會因 wear leveling 被動）。 另外也因為資料冷熱是應用層的事，SSD 不會知道，改善 SSD 效能的一個方法便是冷熱分開在不同的 page裡，讓 GC 好做事。</p><p>作者也建議 “非常熱” 的資料可以先 cache 起來再寫到硬碟。以及當有資料不再被需要、或是需要刪除的時候可以批次進行，這讓 GC 可以一次得到比較多的空間操作，降低空間碎片化。</p><blockquote><p>所以很多人提倡電腦換了要把硬碟丟到調理機裡面，這點在 SSD 也不例外 XD</p></blockquote><h1 id="ref"><a href="#ref" class="headerlink" title="ref"></a>ref</h1><ol start="0"><li><a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-3-pages-blocks-and-the-flash-translation-layer/">coding for ssd part 3</a></li></ol><p>其他有編號參考資料請至原文觀賞：<a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-3-pages-blocks-and-the-flash-translation-layer/#ref">link</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;前情提要&quot;&gt;&lt;a href=&quot;#前情提要&quot; class=&quot;headerlink&quot; title=&quot;前情提要&quot;&gt;&lt;/a&gt;前情提要&lt;/h1&gt;&lt;p&gt;這篇主要介紹 SSD 的讀寫單位如 page、 block，以及寫入放大 (write amplification) 、 w</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>SSD笔记-第二篇SSD结构与性能评估概述</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-02/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-02/</id>
+    <published>2024-09-22T13:18:46.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<p>本文转载自：<a href="https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-2/">https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-2/</a></p><h1 id="緣由"><a href="#緣由" class="headerlink" title="緣由"></a>緣由</h1><p>這篇主要談論 Nand flash 的不同 cell type，基本的 SSD 系統架構，及如何做 SSD 效能評定（Benchmarking）。作者是在 booking.com 上班的軟體工程師。有用過應該就知道這是很大的旅遊訂房行程規劃服務網站，在這類工作環境可能需要對底層的效能有深入解快，才能解決工作上的實務問題。我覺得這類軟體從業人員提供的觀點對自己來說幫助很大，所以翻譯&#x2F;兼做做筆記。</p><h1 id="SSD-？"><a href="#SSD-？" class="headerlink" title="SSD ？"></a>SSD ？</h1><p>Solid state drives，顧名思義 SSD 設計裡去除了傳統硬碟裡不 solid，會動的部分，改善了噪音、震動、讀寫速度慢、易損壞及資料分散時需要硬碟重組來改善讀取時間等缺點。<br>SSD 作為儲存裝置：</p><ul><li>優點：<ul><li>隨機存取快、且存取時間固定，HDD 的 seek time ？ 沒這毛病！</li><li>體積小，看看這些愈來愈小的筆記型電腦、移動裝置、SD卡</li><li>少了傳統硬碟機械故障、硬碟重組等煩惱。</li></ul></li><li>缺點：<ul><li>Cell 有讀寫次數限制(wearing off&#x2F;wear-out)<blockquote><p>但對於 IT 人員來說， HDD 也是有看人品、需買高階型號跟擺乖乖才能保證資料安全的問題。 <img src="https://comet.noonspace.com/w61NoonSpace/kuai/MsgInfo/LogoKuai.png" alt="乖乖 LOGO, kuai.com.tw"></p></blockquote></li><li>bit&#x2F;$ 較高, (TODO)</li></ul></li></ul><h2 id="NAND-flash-種類"><a href="#NAND-flash-種類" class="headerlink" title="NAND flash 種類"></a>NAND flash 種類</h2><p>依各個 block 可儲存的資料多寡，可分為：<br>SLC, MLC, eMLC, TLC, QLC, 3D NAND, see this <a href="https://searchstorage.techtarget.com/definition/flash-memory">link</a> for ref</p><p>關於製程資訊（floating gate, charge trap) 見 <a href="#%E5%BF%AB%E9%96%83%E8%A8%98%E6%86%B6%E9%AB%94%E7%9A%84%E8%B7%AF%E7%B7%9A%E4%B9%8B%E7%88%AD">3</a></p><blockquote><p>關於 IC &#x2F; PCB &#x2F; SMT 的製程可能要補文章（TODO）</p></blockquote><h2 id="存取介面"><a href="#存取介面" class="headerlink" title="存取介面"></a>存取介面</h2><p>目前看到的 SSD 架構 &#x3D;  SSD controller 晶片 + RAM + NAND flash<br>controll 支援多種不同的 host interface 指令格式</p><ul><li>Serial ATA (SATA), 3.0 ~ 6GBit&#x2F;s</li><li>PCI Express (PCIe), 3.0 ~ 8Gbit&#x2F;s per lane, 4 lanes max</li><li><a href="https://nvmexpress.org/">nvme</a></li><li>Serial Attached SCSI interface (SAS), ~ 12 Gbit&#x2F;s</li></ul><blockquote><p>也有看到 open channel SSD 將主控權交給作業系統，詳情可見 [2](#lightnvm, linux implementation of open channel SSD)。我覺得有點像是 zfs 捨棄 raid 卡讓檔案系統透過 HBA 卡接管硬碟所有資訊的作法。我覺的軟體定義的方式應該是終端用戶最後的選擇，畢竟免了 vendor lock in 的問題。</p></blockquote><p>controller 把 NAND flash 的 block, page size, GC(garbage collection) 等細節藏起來，讓 host interface 及其上層作業系統有跟 HDD 一樣的存取介面。</p><h2 id="效能評定-Benchmarking"><a href="#效能評定-Benchmarking" class="headerlink" title="效能評定 Benchmarking"></a>效能評定 Benchmarking</h2><p>原文作者有發現當時的 SSD 效能報告<a href="http://blog.zorinaq.com/many-ssd-benchmark-reviews-contain-flaws/">亂象</a>，例如不同的 <a href="https://gerardnico.com/io/drive/lba">LBA</a>, 過於簡單的 <a href="https://www.userbenchmark.com/Faq/What-is-queue-depth/41">queue size</a> 測試情節。文中也提到 SSD 的讀寫測試其實要在寫入一定的隨機資料<a href="https://searchstorage.techtarget.com/feature/The-truth-about-SSD-performance-benchmarks">pre-conditioning, warm up</a>才有測出 controller GC 能力並具參考價值。而非當時很多資料是拿了新的 SSD 測了 happy path 很開心就把資料放出來這樣，文中舉的比較好的範例是這篇關於 samsung 840 pro 做的<a href="https://www.storagereview.com/samsung_ssd_840_pro_review">評測</a>，可以很明顯看到讀寫效能(IOPS, Read&#x2F;Write at different sizes&#x2F;order)在一定的讀寫後明顯下降，文中也對其拿實際的應用案例如資料庫、網頁伺服器做了分析，並得到其在前述企業應用環境效能較差的結論。</p><blockquote><p><code>圖一堆，真是很有心 XD</code></p></blockquote><p>目前不確定儲存裝置是否有個明確的效能評定規範（針對不同應用情境、不同裝置、不同 host interface）。但作者提出一套他的原則（2.3內容）：</p><ul><li>workload type ，確定你的應用環境是哪種讀寫操作居多</li><li>percentage of read &#x2F; write, 設定同步進行的讀寫操作比例，如 30% 讀 70% 寫</li><li>queue length，你有多少同步執行的執行緒(thread)在對儲存裝置下指令</li><li>size of data chunk, 你的應用環境的檔案讀寫大小（4KB, 8KB 之類的)</li></ul><blockquote><p>最後一點不太確定怎麼定義，如果你是跑 postgresql, mysql 那要怎麼知道大小？</p></blockquote><p>以及需要觀測的指標：</p><ul><li>Throughput: KB&#x2F;s, MB&#x2F;s 資料轉換的效率，一般是 sequential 的評定會看</li><li>IOPS: 每秒可完成的 Input&#x2F;Output（IO） 操作，這是以作業系統的觀點來看，通常是拿 4KB 的寫入來測，用來評定隨機操作的效能。<blockquote><p>應該是因為 4KB 是大部分作業系統 virtual memory 預設的 page size, 這也要因應使用情節而調整。</p></blockquote></li><li>latency:  下指令到完成指令回傳結果需要的時間 μs, ms</li></ul><p>IOPS 也可以換算成 throughput, 如 1000 IOPS 在 4KB 檔案大小下 就是 4 MB&#x2F;s. 作者也舉了個可能的 logging 系統案例， 10k IOPS, log 檔四散各地，可能的 throughput 會是 20 MB&#x2F;s </p><p>另外 throughput 不等同於效能，假設你有個伺服器裝了個 10G 網卡，偏偏你的系統每次作業要跟 25 個 Database 拿資料，每個連線要花 20 ms 好死不死你還寫成 single blocked thread，每次處理一個網頁頁面至少都要多花 500 ms，這個就偏人的問題，而非系統效能瓶頸。</p><blockquote><p>所以我想一般都是在系統發展到一定規模，要做大、或是遇上應用程式端無法解決瓶頸時才會多考慮底層儲存系統選擇與設定。</p></blockquote><p>在確保自己的系統架構不會對儲存系統造成不必要的負擔之後，這三項指標（一起）是系統管理員、軟體工程師在評估自己的硬體是否符合需求時的常用指標。</p><h1 id="參考資料"><a href="#參考資料" class="headerlink" title="參考資料"></a>參考資料</h1><h2 id="coding-for-ssd-part2"><a href="#coding-for-ssd-part2" class="headerlink" title="coding for ssd part2"></a>coding for ssd part2</h2><p><a href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-2-architecture-of-an-ssd-and-benchmarking/">link</a></p><h2 id="lightnvm-linux-implementation-of-open-channel-SSD"><a href="#lightnvm-linux-implementation-of-open-channel-SSD" class="headerlink" title="lightnvm, linux implementation of open channel SSD"></a>lightnvm, linux implementation of open channel SSD</h2><p>links: </p><ul><li><a href="http://lightnvm.io/">http://lightnvm.io/</a></li><li><a href="https://openchannelssd.readthedocs.io/en/latest/">https://openchannelssd.readthedocs.io/en/latest/</a></li><li><a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/bjorling">https://www.usenix.org/conference/fast17/technical-sessions/presentation/bjorling</a></li><li><a href="https://www.ithome.com.tw/news/122307">https://www.ithome.com.tw/news/122307</a></li></ul><h2 id="The-Myth-of-HDD-Endurance"><a href="#The-Myth-of-HDD-Endurance" class="headerlink" title="The Myth of HDD Endurance"></a>The Myth of HDD Endurance</h2><p><a href="https://www.micron.com/about/blog/2016/february/the-myth-of-hdd-endurance">https://www.micron.com/about/blog/2016/february/the-myth-of-hdd-endurance</a></p><h2 id="快閃記憶體的路線之爭"><a href="#快閃記憶體的路線之爭" class="headerlink" title="快閃記憶體的路線之爭"></a>快閃記憶體的路線之爭</h2><p><a href="https://www.digitimes.com.tw/col/article.asp?id=717">https://www.digitimes.com.tw/col/article.asp?id=717</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;本文转载自：&lt;a href=&quot;https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-2/&quot;&gt;https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>SSD笔记- 第一篇引言</title>
+    <link href="https://wanger-sjtu.github.io/ssd-notes-01/"/>
+    <id>https://wanger-sjtu.github.io/ssd-notes-01/</id>
+    <published>2024-09-22T13:15:14.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<p>本文转载自：<a href="https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-1/">https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-1/</a></p><h2 id="缘由"><a href="#缘由" class="headerlink" title="缘由"></a>缘由</h2><p>Emmanuel Goossaert 是booking.com的工程师，他因为想拿SSD 做自己的 key-value store专案的储存方案，开始学习SSD 相关知识。这六篇文是他在2014 年写下，里面很多的参考资讯可能都找不到了，但是我刚好在准备SSD 相关工作面试，想想还是有参考价值，所以做了简单翻译，跟一些笔记，再加一些(个人意见)。</p><h2 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h2><p>作者对这系列文章的结论可以看<img src="/" alt="第六篇"></p><h2 id="我的结论"><a href="#我的结论" class="headerlink" title="我的结论"></a>我的结论</h2><p>我自己是觉得这系列文章对于入门了解SSD 还不错。如果要做到这种程度的最佳化必须要很多人一起投入。</p><ol><li>sysadmin 必须确认档案系统、SSD 型号、作业系统配置。</li><li>developer 应用层的程式必须要注意错误的写入&#x2F;读取的资料大小&#x2F;频率可能对SSD 造成的过大压力。</li></ol><p><strong>难维护。</strong></p><p>就目前我的认知，需要做到对效能斤斤计较又很重要的系统瓶颈在File system，需要对SSD 特性客制化应用层程式的机会很小。 解决方案？选个好文件系统？</p><h2 id="文件系统"><a href="#文件系统" class="headerlink" title="文件系统"></a>文件系统</h2><p>zfs既有的档案系统阶层在效能上可能已经很优秀了，还送copy-on-write，容错机制，snapshot。</p><img src="/ssd-notes-01/image.png" class="" title="alt text"><p> <a href="http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html">http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html</a></p><p>zfs 也开始可以在linux 上面使用，Ubuntu 19.10 也有直接把zfs 装成roo FS 的选项。 如果是一般server、文书、游戏使用我会以后装个zfs 就好了。</p><p>至于更高端的选择.. 可能是建cepf cluster，或是open-channel SSD 等特殊解法？</p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;本文转载自：&lt;a href=&quot;https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-1/&quot;&gt;https://www.owlfox.org/blog/2019-11-25-coding-for-SSD-part-</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="ssd" scheme="https://wanger-sjtu.github.io/tags/ssd/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>fp16 的累加误差有多大</title>
+    <link href="https://wanger-sjtu.github.io/fp16-err/"/>
+    <id>https://wanger-sjtu.github.io/fp16-err/</id>
+    <published>2024-09-22T06:41:48.000Z</published>
+    <updated>2024-11-06T14:07:20.570Z</updated>
+    
+    <content type="html"><![CDATA[<p>最近在项目中需要实现fp16的数据类型做FFN的计算，算子实现的同学反馈误差与x86上得到的golden数据有比较大误差。开始以为是x86侧做数值模拟仿真的问题。后面也实现了对比了一下，发现误差累计确实挺大。</p><h2 id="实测结果对比"><a href="#实测结果对比" class="headerlink" title="实测结果对比"></a>实测结果对比</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="comment">// Seed with a real random value, if available</span></span><br><span class="line">    std::random_device rd;</span><br><span class="line">    <span class="function">std::mt19937 <span class="title">gen</span><span class="params">(rd())</span></span>;</span><br><span class="line">    std::uniform_real_distribution&lt;&gt; <span class="built_in">dist</span>(<span class="number">0</span>, <span class="number">0.01</span>);</span><br><span class="line">    </span><br><span class="line">    <span class="type">float16_t</span> lhs[<span class="number">4096</span>] = &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">float16_t</span> rhs[<span class="number">4096</span>] = &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">4096</span>; i++) &#123;</span><br><span class="line">        lhs[i] =  <span class="built_in">dist</span>(gen);</span><br><span class="line">        rhs[i] =  <span class="built_in">dist</span>(gen);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">float16_t</span> res_fp16 = <span class="number">0</span>;</span><br><span class="line">    <span class="type">float</span> res_fp32 = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">4096</span>; i++) &#123;</span><br><span class="line">        res_fp16 += lhs[i] * rhs[i];</span><br><span class="line">        res_fp32 += lhs[i] * rhs[i];</span><br><span class="line">    &#125;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;fp16 &quot;</span> &lt;&lt; res_fp16 &lt;&lt; std::endl;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;fp32 &quot;</span> &lt;&lt; res_fp32 &lt;&lt; std::endl;</span><br><span class="line">    <span class="built_in">wirte2file</span>(<span class="string">&quot;/data/local/tmp/lhs&quot;</span>, <span class="built_in">reinterpret_cast</span>&lt;<span class="type">char</span>*&gt;(lhs), <span class="number">8192</span>);</span><br><span class="line">    <span class="built_in">wirte2file</span>(<span class="string">&quot;/data/local/tmp/rhs&quot;</span>, <span class="built_in">reinterpret_cast</span>&lt;<span class="type">char</span>*&gt;(rhs), <span class="number">8192</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><p>结果输出：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">fp16 0.0942383</span><br><span class="line">fp32 0.103176</span><br></pre></td></tr></table></figure><p>相对误差到8.1%了。难怪反馈有问题。</p><table><thead><tr><th>dim</th><th>绝对误差</th></tr></thead><tbody><tr><td>100</td><td>1.63913e-07</td></tr><tr><td>1000</td><td>-0.00033829</td></tr><tr><td>2000</td><td>-0.000909835</td></tr><tr><td>4000</td><td>-0.00924221</td></tr></tbody></table><h2 id="golden-数据误差从何而来"><a href="#golden-数据误差从何而来" class="headerlink" title="golden 数据误差从何而来"></a>golden 数据误差从何而来</h2><p>实际生成golden数据的时候，也考虑了数值类型差异的影响，那为什么还存在误差呢？</p><blockquote><p>对比了一下dot的视线与直接累加结果</p></blockquote><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line">lhs = np.fromfile(<span class="string">&quot;lhs&quot;</span>,dtype=np.float16)</span><br><span class="line">rhs = np.fromfile(<span class="string">&quot;rhs&quot;</span>,dtype=np.float16)</span><br><span class="line"></span><br><span class="line">lhs = torch.from_numpy(lhs)</span><br><span class="line">rhs = torch.from_numpy(rhs)</span><br><span class="line"></span><br><span class="line">res = torch.Tensor([<span class="number">1</span>]).half()</span><br><span class="line">res[<span class="number">0</span>] = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4096</span>):</span><br><span class="line">    res += lhs[i:i+<span class="number">1</span>] * rhs[i:i+<span class="number">1</span>]</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(res)</span><br><span class="line"><span class="built_in">print</span>(torch.dot(lhs, rhs))</span><br></pre></td></tr></table></figure><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">tensor([0.0942], dtype=torch.float16)</span><br><span class="line">tensor(0.1041, dtype=torch.float16)</span><br></pre></td></tr></table></figure><p>结果对得上了。torch 的 dot实现的时候很可能用了更高数值类型做累加。</p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;最近在项目中需要实现fp16的数据类型做FFN的计算，算子实现的同学反馈误差与x86上得到的golden数据有比较大误差。开始以为是x86侧做数值模拟仿真的问题。后面也实现了对比了一下，发现误差累计确实挺大。&lt;/p&gt;
+&lt;h2 id=&quot;实测结果对比&quot;&gt;&lt;a href=&quot;#实测</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="DL" scheme="https://wanger-sjtu.github.io/tags/DL/"/>
+    
+    <category term="数值精度" scheme="https://wanger-sjtu.github.io/tags/%E6%95%B0%E5%80%BC%E7%B2%BE%E5%BA%A6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>cuda_mode_1</title>
+    <link href="https://wanger-sjtu.github.io/cuda-mode-1/"/>
+    <id>https://wanger-sjtu.github.io/cuda-mode-1/</id>
+    <published>2024-09-11T14:14:15.000Z</published>
+    <updated>2024-11-06T14:07:20.566Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="hello-load-inline"><a href="#hello-load-inline" class="headerlink" title="hello load inline"></a>hello load inline</h1><p>这个是torch加载C++扩展的简单demo。代码比较简单</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.utils.cpp_extension <span class="keyword">import</span> load_inline</span><br><span class="line"></span><br><span class="line">cpp_source = <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">std::string hello() &#123;</span></span><br><span class="line"><span class="string">  return &quot;Hello World!&quot;;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">my_module = load_inline(</span><br><span class="line">    name=<span class="string">&#x27;my_module&#x27;</span>,</span><br><span class="line">    cpp_sources=[cpp_source],</span><br><span class="line">    functions=[<span class="string">&#x27;hello&#x27;</span>],</span><br><span class="line">    verbose=<span class="literal">True</span>,</span><br><span class="line">    build_directory=<span class="string">&#x27;./tmp&#x27;</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(my_module.hello())</span><br></pre></td></tr></table></figure><p>执行输出：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Emitting ninja build file ./tmp/build.ninja...</span><br><span class="line">Building extension module my_module...</span><br><span class="line">Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)</span><br><span class="line">ninja: warning: build log version is too old; starting over</span><br><span class="line">[1/2] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=my_module -DTORCH_API_INCLUDE_EXTENSION_H -DPYBIND11_COMPILER_TYPE=\&quot;_gcc\&quot; -DPYBIND11_STDLIB=\&quot;_libstdcpp\&quot; -DPYBIND11_BUILD_ABI=\&quot;_cxxabi1011\&quot; -isystem /home/anaconda3/lib/python3.12/site-packages/torch/include -isystem /home/anaconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -isystem /home/anaconda3/lib/python3.12/site-packages/torch/include/TH -isystem /home/anaconda3/lib/python3.12/site-packages/torch/include/THC -isystem /home/anaconda3/include/python3.12 -D_GLIBCXX_USE_CXX11_ABI=0 -fPIC -std=c++17 -c /mnt/e/cuda_mode_notes/lecture_001/tmp/main.cpp -o main.o </span><br><span class="line">[2/2] c++ main.o -shared -L/home/anaconda3/lib/python3.12/site-packages/torch/lib -lc10 -ltorch_cpu -ltorch -ltorch_python -o my_module.so</span><br><span class="line">Loading extension module my_module...</span><br><span class="line">Hello World!</span><br></pre></td></tr></table></figure><p>这个需要创建好tmp文件夹。然后创建编译、加载</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">-rwxrwxrwx  .ninja_deps</span><br><span class="line">-rwxrwxrwx  .ninja_log</span><br><span class="line">-rwxrwxrwx  build.ninja</span><br><span class="line">-rwxrwxrwx  main.cpp</span><br><span class="line">-rwxrwxrwx  main.o</span><br><span class="line">-rwxrwxrwx  my_module.so</span><br></pre></td></tr></table></figure><p>这里完成了完整的编译流程，把C++代码放在main.cpp中，编译到.o文件，链接到so。然后在python侧加载运行。<br>需要注意的是，这里底层依赖的是pybind11的库。</p><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;torch/extension.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function">std::string <span class="title">hello</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="string">&quot;Hello World!&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="built_in">PYBIND11_MODULE</span>(TORCH_EXTENSION_NAME, m) &#123;</span><br><span class="line">m.<span class="built_in">def</span>(<span class="string">&quot;hello&quot;</span>, torch::<span class="built_in">wrap_pybind_function</span>(hello), <span class="string">&quot;hello&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure><h1 id="load-inline-py"><a href="#load-inline-py" class="headerlink" title="load_inline.py"></a>load_inline.py</h1><p>这里是上面同样的操作，不同的是这里实现的是CUDA代码，定义了一个平方运算的CUDA程序 。</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.utils.cpp_extension <span class="keyword">import</span> load_inline</span><br><span class="line"></span><br><span class="line"><span class="comment"># Define the CUDA kernel and C++ wrapper</span></span><br><span class="line">cuda_source = <span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">__global__ void square_matrix_kernel(const float* matrix, float* result, int width, int height) &#123;</span></span><br><span class="line"><span class="string">    int row = blockIdx.y * blockDim.y + threadIdx.y;</span></span><br><span class="line"><span class="string">    int col = blockIdx.x * blockDim.x + threadIdx.x;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    if (row &lt; height &amp;&amp; col &lt; width) &#123;</span></span><br><span class="line"><span class="string">        int idx = row * width + col;</span></span><br><span class="line"><span class="string">        result[idx] = matrix[idx] * matrix[idx];</span></span><br><span class="line"><span class="string">    &#125;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">#include &lt;sys/types.h&gt;</span></span><br><span class="line"><span class="string">#include &lt;unistd.h&gt;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">torch::Tensor square_matrix(torch::Tensor matrix) &#123;</span></span><br><span class="line"><span class="string">    const auto height = matrix.size(0);</span></span><br><span class="line"><span class="string">    const auto width = matrix.size(1);</span></span><br><span class="line"><span class="string">    pid_t pid = getpid();</span></span><br><span class="line"><span class="string">    printf(&quot;pid %d &quot; , pid);</span></span><br><span class="line"><span class="string">    auto result = torch::empty_like(matrix);</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    dim3 threads_per_block(16, 16);</span></span><br><span class="line"><span class="string">    dim3 number_of_blocks((width + threads_per_block.x - 1) / threads_per_block.x,</span></span><br><span class="line"><span class="string">                          (height + threads_per_block.y - 1) / threads_per_block.y);</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    square_matrix_kernel&lt;&lt;&lt;number_of_blocks, threads_per_block&gt;&gt;&gt;(</span></span><br><span class="line"><span class="string">        matrix.data_ptr&lt;float&gt;(), result.data_ptr&lt;float&gt;(), width, height);</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">    return result;</span></span><br><span class="line"><span class="string">&#125;</span></span><br><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"></span><br><span class="line">cpp_source = <span class="string">&quot;torch::Tensor square_matrix(torch::Tensor matrix);&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Load the CUDA kernel as a PyTorch extension</span></span><br><span class="line">square_matrix_extension = load_inline(</span><br><span class="line">    name=<span class="string">&#x27;square_matrix_extension&#x27;</span>,</span><br><span class="line">    cpp_sources=cpp_source,</span><br><span class="line">    cuda_sources=cuda_source,</span><br><span class="line">    functions=[<span class="string">&#x27;square_matrix&#x27;</span>],</span><br><span class="line">    with_cuda=<span class="literal">True</span>,</span><br><span class="line">    extra_cuda_cflags=[<span class="string">&quot;-O2&quot;</span>],</span><br><span class="line">    build_directory=<span class="string">&#x27;./load_inline_cuda&#x27;</span>,</span><br><span class="line">    <span class="comment"># extra_cuda_cflags=[&#x27;--expt-relaxed-constexpr&#x27;]</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">a = torch.tensor([[<span class="number">1.</span>, <span class="number">2.</span>, <span class="number">3.</span>], [<span class="number">4.</span>, <span class="number">5.</span>, <span class="number">6.</span>]], device=<span class="string">&#x27;cuda&#x27;</span>)</span><br><span class="line"><span class="built_in">print</span>(square_matrix_extension.square_matrix(a))</span><br></pre></td></tr></table></figure><p>运行下来可以正常运行，没啥问题。</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">python load_inline.py</span></span><br><span class="line">/home/wanger/anaconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py:1965: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. </span><br><span class="line">If this is not desired, please set os.environ[&#x27;TORCH_CUDA_ARCH_LIST&#x27;].</span><br><span class="line">  warnings.warn(</span><br><span class="line">tensor([[ 1.,  4.,  9.],</span><br><span class="line">        [16., 25., 36.]], device=&#x27;cuda:0&#x27;)</span><br><span class="line">pid 17133 </span><br></pre></td></tr></table></figure><p><code>ncu python load_inline.py </code> 这个倒没有跟代码一样报错。不过也没任何输出</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">ncu python load_inline.py</span> </span><br><span class="line">==PROF== Connected to process 17416 (/home/wanger/anaconda3/bin/python3.12)</span><br><span class="line">/home/wanger/anaconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py:1965: UserWarning: TORCH_CUDA_ARCH_LIST is not set, all archs for visible cards are included for compilation. </span><br><span class="line">If this is not desired, please set os.environ[&#x27;TORCH_CUDA_ARCH_LIST&#x27;].</span><br><span class="line">  warnings.warn(</span><br><span class="line">==ERROR== Unknown Error on device 0.</span><br><span class="line">tensor([[ 1.,  4.,  9.],</span><br><span class="line">        [16., 25., 36.]], device=&#x27;cuda:0&#x27;)</span><br><span class="line">pid 17416 </span><br><span class="line">==PROF== Disconnected from process 17416</span><br></pre></td></tr></table></figure>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;hello-load-inline&quot;&gt;&lt;a href=&quot;#hello-load-inline&quot; class=&quot;headerlink&quot; title=&quot;hello load inline&quot;&gt;&lt;/a&gt;hello load inline&lt;/h1&gt;&lt;p&gt;这个是torch加载</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="cuda" scheme="https://wanger-sjtu.github.io/tags/cuda/"/>
+    
+    <category term="lecture" scheme="https://wanger-sjtu.github.io/tags/lecture/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>端侧 LLM 的PD分离技术之稀疏性</title>
+    <link href="https://wanger-sjtu.github.io/llm-sparse/"/>
+    <id>https://wanger-sjtu.github.io/llm-sparse/</id>
+    <published>2024-09-09T14:16:19.000Z</published>
+    <updated>2024-11-06T14:07:20.570Z</updated>
+    
+    <content type="html"><![CDATA[<img src="/llm-sparse/image.png" class="" title="alt text"><blockquote><p>Attention是时空力场（LLM只有时，Version存在空间力场），而FFN则是空间结构，并且代表了基于Knowledge的静态高纬字典，也有人用图书馆来比喻。   </p></blockquote><p>首先回顾一下transformer block的结构，Attention +FFN，前者中的 kvcache 随着序列的增长占用越来越高，FFN则在权重中占了极大比例。</p><ul><li>#Attention 部分完成的是时间序列建模，完成的<strong>当前token与历史信息（kv cache）</strong>的相关性查找。</li><li>#FFN 层则沉淀了训练集中的固化的“知识”，从Gate、Up的运算来看，其计算也有很强的查找属性。FFN权重的尺寸占比比较高，从直觉上讲计算中也是一部分发挥作用，这中间存在一个筛选的机制。从计算过程也可以反映出，Up、Gate的计算接近于查找得到一个mask，Down部分对应value，最终得到结果传递给下一层。</li></ul><p>既然是查找过程，就存在选择，也就有了稀疏性。有了稀疏性指引，那很多工作就可以优化了。<br>比如：Attention部分kvcache 走以查代算、DRAM到GPU HBM的动态加卸载等等</p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;img src=&quot;/llm-sparse/image.png&quot; class=&quot;&quot; title=&quot;alt text&quot;&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Attention是时空力场（LLM只有时，Version存在空间力场），而FFN则是空间结构，并且代表了基于Knowledg</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="llm" scheme="https://wanger-sjtu.github.io/tags/llm/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Nvidia 的快速反量化操作</title>
+    <link href="https://wanger-sjtu.github.io/fast-dequant/"/>
+    <id>https://wanger-sjtu.github.io/fast-dequant/</id>
+    <published>2024-08-16T13:29:22.000Z</published>
+    <updated>2024-11-06T14:07:20.570Z</updated>
+    
+    <content type="html"><![CDATA[<p>主要记录了论文Who Says Elephants Can’t Run: Bringing Large Scale MoE Models into Cloud Scale Production中关于反量化的快速操作。</p><h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>NN模型通常为了降低RAM、FLASH占用，提高计算吞吐率，会引入量化操作。比如INT8、INT4、INT3等等。如果是weight only的量化方法情况，输入的部分还是浮点，在GPU、NPU、arm上float16用的比较多。这样一来，就需要在计算的时候，需要把权重反量化到浮点再进行计算。</p><p>论文在实验中发现，使用原生的native Int8ToFloat16做数值类型转换，性能并不符合预期。于是决定，将native Int8ToFloat16（吞吐低，底层应该是走 PTX cvt指令-&gt;SASS，关于ARM上计算，这里回头查一下）替换成一系列高吞吐的ALU和FP16运算指令，来巧妙地完成Int8-&gt;Float16的数值转换。</p><h2 id="INT8-Float16"><a href="#INT8-Float16" class="headerlink" title="INT8 -&gt; Float16"></a>INT8 -&gt; Float16</h2><ul><li>【观察一】 对于任意 FP16 数 X，其中 1024 ≤ X &lt;2048, 1024 将准确地表示在指数位，而 int(X − 1024) 部分将直接存储在尾数中（二进制level原封不动地存储）。</li><li>【观察二】对于任何整数 0 ≤ Y &lt; 1024，我们可以构造 Y + 1024 的 FP16 表示，将指数设置为 1024 并存储 Y在 FP16 尾数中。</li></ul><p><a href="https://evanw.github.io/float-toy/">浮点表示</a></p><p>首先，回忆一下浮点的表示方法。下图表示了float32的表示。</p><img src="/fast-dequant/image.png" class="" title="alt text"><p>很明显可以看出来，右侧尾数表示的范围与左侧指数的表示范围是强相关的，左边指数范围越小，那么精度越高；反之，指数越大，精度越低。下面我们看下float16。</p><img src="/fast-dequant/image-1.png" class="" title="alt text"><p>我们先忽略符号位部分，中间5bit表示指数，右边10bit表示小数。回到转10进制的表示，<br>$$<br> sign \times 2^{exp-15} \times (1+\frac{frac}{1024})<br>$$</p><p>其中fraction表示尾数部分的10进制数值，公式中之所以是(fraction&#x2F;1024)，是因为FP16尾数部分是10位，而2^10&#x3D;1024。<br>来看一个FP16二进制转实数的列子，比如<code>0b0110010000000011</code>这个FP16，其中组成为：</p><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0b 0 11001 0000000011</span><br><span class="line"># 符号位：0</span><br><span class="line"># 指数位：11001 -&gt; 25 -&gt; 25 - 15 = 10, 2^10=1024</span><br><span class="line"># 尾数部分：0000000011 -&gt; fraction为3（尾数部分的10进制数值）</span><br></pre></td></tr></table></figure><p>转换为实数表达为：</p><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1 * 2^10 * (1 + 3/1024) = 1027 = 1024 + 3 &lt;-&gt; 2^10 * 1 + 2^10 * 3/1024 </span><br></pre></td></tr></table></figure><p>观察一，是<strong>针对FP16数值</strong>而言的，它描述的其实是，FP16中落在$[1024, 2048)$ 范围中的数值，<strong>在16个bit位上的分布规律</strong>。如果转float32。同样道理算一下就可以。</p><p>现在从观察一可以得到一个结论：<br>$[1024, 2048)$ 范围内的float16整数x，在尾数部分的值恰好等于 x-1024<br>现在结合观察二，就得到量化后int4数值速转float16方法。</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">x = 0x6400 | (x &amp;0b1111)</span><br><span class="line">x = x - 1024</span><br></pre></td></tr></table></figure><p>上面可以看出，这个操作仅支持正数，那么int8是有符号的怎么处理的呢？</p><blockquote><p>量化存储的int值是加上了128转为u8，在反量化时需要减去这个128即可</p></blockquote><p>code: <a href="https://github.com/Wanger-SJTU/recipes/tree/master/fast_dequant">https://github.com/Wanger-SJTU/recipes/tree/master/fast_dequant</a><br><strong>参考链接：</strong></p><ol><li><a href="https://zhuanlan.zhihu.com/p/657072856">https://zhuanlan.zhihu.com/p/657072856</a></li></ol>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;主要记录了论文Who Says Elephants Can’t Run: Bringing Large Scale MoE Models into Cloud Scale Production中关于反量化的快速操作。&lt;/p&gt;
+&lt;h1 id=&quot;背景&quot;&gt;&lt;a href=&quot;#背景</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="llm" scheme="https://wanger-sjtu.github.io/tags/llm/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Turbo Sparse</title>
+    <link href="https://wanger-sjtu.github.io/TurboSparse/"/>
+    <id>https://wanger-sjtu.github.io/TurboSparse/</id>
+    <published>2024-08-10T15:04:02.000Z</published>
+    <updated>2024-11-06T14:07:20.566Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="关于llama稀疏性的观察"><a href="#关于llama稀疏性的观察" class="headerlink" title="关于llama稀疏性的观察"></a>关于llama稀疏性的观察</h2><p>llama原始模型的FFN计算过程为：</p><p>$$<br>f(x) &#x3D; \text{silu}(xW_{Gate}) \odot xW_{UP} \times W_{Down}<br>$$</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">FeedForward</span>(nn.Module):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">forward</span>(<span class="params">self, x</span>):</span><br><span class="line">        <span class="keyword">return</span> self.w2(F.silu(self.w1(x)) * self.w3(x))</span><br></pre></td></tr></table></figure><table><thead><tr><th>Model</th><th>Sparisty</th></tr></thead><tbody><tr><td>Llama-2-7B</td><td>40%</td></tr><tr><td>ReLULlama-7B</td><td>67%</td></tr><tr><td>ShiftedReLULlama-7B</td><td>71%</td></tr></tbody></table><p>论文统计首层transformer block FFN层的稀疏性质，原生FFN的稀疏性仅有40%，激活函数由silu替换为Relu后可以达到67%，而ShiftedReLU可进一步提高到71%。<br>从FFN层的计算上来看，表面上是Gate部分作为门控控制了计算的稀疏性，<strong>实际上Up、Gate共同控制了计算的稀疏性</strong>，所以很自然的就引出了<strong>drelu</strong>的方案</p><p>$$<br>\text{Combined dReLU} (x) :&#x3D; max(0, xW_{gate} ) \odot max(0, xW_{up} )<br>$$</p><img src="/TurboSparse/image-2.png" class="" title="alt text"><p>从训练过程上来看，替换以后收敛性没有影响，结果的评价指标上也没有太大影响。</p><p>下一步就是进一步评价下修改以后得稀疏度了。这里没有直接用两个mask的交集，而是按照topk的方法做了评测</p><p>$$<br>\text{Mask}(x) :&#x3D; Top_k(|\text{Combined}(x)|)<br>$$</p><p>$$<br>        \text{Gated-MLP}(x) :&#x3D; (\text{Combined}(x) ∗ \text{Mask}(x))W_{down}<br>$$</p><img src="/TurboSparse/image-1.png" class="" title="alt text"><p>显然效果显著。不影响模型表现的情况下，稀疏到达到了80%，而牺牲一定精度的条件下可以到达<strong>90%</strong></p><h2 id="Sparsity-of-Sparsifi-ed-Models"><a href="#Sparsity-of-Sparsifi-ed-Models" class="headerlink" title="Sparsity of Sparsifi ed Models"></a>Sparsity of Sparsifi ed Models</h2><img src="/TurboSparse/image.png" class="" title="alt text">]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h2 id=&quot;关于llama稀疏性的观察&quot;&gt;&lt;a href=&quot;#关于llama稀疏性的观察&quot; class=&quot;headerlink&quot; title=&quot;关于llama稀疏性的观察&quot;&gt;&lt;/a&gt;关于llama稀疏性的观察&lt;/h2&gt;&lt;p&gt;llama原始模型的FFN计算过程为：&lt;/p&gt;
+&lt;p</summary>
+      
+    
+    
+    
+    <category term="paper" scheme="https://wanger-sjtu.github.io/categories/paper/"/>
+    
+    
+    <category term="LLM" scheme="https://wanger-sjtu.github.io/tags/LLM/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>kimi 长上下文 case</title>
+    <link href="https://wanger-sjtu.github.io/kimi-case-0/"/>
+    <id>https://wanger-sjtu.github.io/kimi-case-0/</id>
+    <published>2024-06-18T14:35:17.000Z</published>
+    <updated>2024-11-06T14:07:20.570Z</updated>
+    
+    <content type="html"><![CDATA[<p>今天用kimi看论文的时候，想让他总结翻译一下论文某一节的内容。结果不是很理想，看来这个也是一种形式的“捞针实验”了吧<br>后续再其他平台也测试一下。</p><img src="/kimi-case-0/image.png" class="" title="alt text">]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;今天用kimi看论文的时候，想让他总结翻译一下论文某一节的内容。结果不是很理想，看来这个也是一种形式的“捞针实验”了吧&lt;br&gt;后续再其他平台也测试一下。&lt;/p&gt;
+&lt;img src=&quot;/kimi-case-0/image.png&quot; class=&quot;&quot; title=&quot;alt te</summary>
+      
+    
+    
+    
+    <category term="记录" scheme="https://wanger-sjtu.github.io/categories/%E8%AE%B0%E5%BD%95/"/>
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/tags/%E6%8A%80%E6%9C%AF/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Nivdia向量数据库图检索最新标杆——CAGRA</title>
+    <link href="https://wanger-sjtu.github.io/CARGA/"/>
+    <id>https://wanger-sjtu.github.io/CARGA/</id>
+    <published>2024-06-16T10:45:44.000Z</published>
+    <updated>2024-11-06T14:07:20.562Z</updated>
+    
+    <content type="html"><![CDATA[<p><a href="https://docs.rapids.ai/api/raft/nightly/pylibraft_api/neighbors/#cagra">CAGRA</a> 是 N社在RAFT项目中 最新的 ANN 向量索引。这是一种高性能的、 GPU 加速的、基于图的方法，尤其是针对<strong>小批量情况进行了优化</strong>，其中每次查找只包含一个或几个查询向量。</p><p>与其他像HNSW、SONG等这类基于图的方法相似，CAGRA在索引训练阶段构建了一个经过优化的 k-最近邻（k-NN）图。这个图具备多种优良特性，能够在保持合理召回率的同时实现高效的搜索。与NSW、HNSW算法不同的是，CARGA算法是单层的图，为了适用GPU计算加速，在构建和查询阶段做了特殊的优化。</p><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> raft::neighbors;</span><br><span class="line"><span class="comment">// use default index parameters based on shape of the dataset</span></span><br><span class="line">ivf_pq::index_params build_params =   ivf_pq::index_params::<span class="built_in">from_dataset</span>(dataset);</span><br><span class="line">ivf_pq::search_params search_params;</span><br><span class="line"><span class="keyword">auto</span> knn_graph      = raft::<span class="built_in">make_host_matrix</span>&lt;IdxT, IdxT&gt;(dataset.<span class="built_in">extent</span>(<span class="number">0</span>), <span class="number">128</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// create knn graph</span></span><br><span class="line">cagra::<span class="built_in">build_knn_graph</span>(res, dataset, knn_graph.<span class="built_in">view</span>(), <span class="number">2</span>, build_params, search_params);</span><br><span class="line"><span class="keyword">auto</span> optimized_gaph = raft::<span class="built_in">make_host_matrix</span>&lt;IdxT, IdxT&gt;(dataset.<span class="built_in">extent</span>(<span class="number">0</span>), <span class="number">64</span>);</span><br><span class="line">cagra::<span class="built_in">optimize</span>(res, dataset, knn_graph.<span class="built_in">view</span>(), optimized_graph.<span class="built_in">view</span>());</span><br><span class="line"><span class="comment">// Construct an index from dataset and optimized knn_graph</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">auto</span> index = cagra::<span class="built_in">index</span>&lt;T, IdxT&gt;(res, build_params.<span class="built_in">metric</span>(), dataset,</span><br><span class="line">                                   optimized_graph.<span class="built_in">view</span>());</span><br></pre></td></tr></table></figure><p>CAGRA构建的图有几个不同之处：</p><ul><li>每个节点有固定的出度</li><li>构建的图是一个有向图</li><li>不同于HNSW，CAGRA构建的图是单层的</li></ul><h2 id="构建"><a href="#构建" class="headerlink" title="构建"></a>构建</h2><p>为了满足GPU加速的要求，并行度要高、且召回率也要准确，构建的图得满足：</p><ol><li><p><strong>任意节点间的遍历能力</strong>：这是为了确保图中的所有节点都是相互可达的。如果一个图中存在某些节点无法从其他节点访问，那么这些孤立的节点在搜索过程中将永远不会被考虑，这可能导致搜索结果的不完整或不准确。确保所有节点都是相互可达的，有助于提高搜索算法的覆盖率和准确性。</p></li><li><p><strong>指定遍历次数内的节点访问数量</strong>：这个指标用来衡量从任一节点出发，在有限的步骤内能够探索到的节点的多样性和数量。在ANNS中，通常希望在较少的遍历步骤内能够访问到更多的节点，这样可以更快地找到可能的最近邻。如果一个节点在几步之内能够访问到很多其他节点，那么搜索算法的效率和召回率（即找到真正最近邻的概率）可能会更高。</p></li></ol><p>所以就涉及到了图构建过程中的优化目标：</p><ul><li><p><strong>强连通分量（Strong Connected Components, CC）</strong> 的个数<br>  通过计算图中的强连通分量数量来评估图中任意节点是否能够到达其他任意节点。强连通分量是图中的子图，其中每个节点都可以直接或间接地到达子图中的任何其他节点。</p><blockquote><p>A smaller number of strong CC are preferred because a larger number of CC can lead to more unreachable nodes starting from a search start node.  </p></blockquote></li><li><p><strong>平均 2 跳节点数（Average 2-hop Node Count）</strong>：<br>  这个指标衡量的是从任一节点在两次遍历内能够到达的节点数量，用以评估在特定搜索迭代步骤中可以探索的节点数量。</p></li></ul><h3 id="构建过程"><a href="#构建过程" class="headerlink" title="构建过程"></a>构建过程</h3><img src="/CARGA/image.png" class="" title="alt text"><p>CAGRA算法的构建训练过程，先初始化一个knn graph，然后优化其中的边关系。</p><ol><li>初始knn-graph创建：比较简单，这里实际上可以理论上依赖任何一种已有的算法，但在实现上选了IVF-PQ、和NN-Descent算法。这里就不过多展开了<blockquote><p>步骤一结束后，每个节点都有k个邻居节点，并且通常按距离排序</p></blockquote></li><li>基于<strong>rank</strong>的重排序：这里每个节点出边按照初始rank重新排序，并且过滤掉一些边 <img src="/CARGA/reorder.png" class="" title="alt text"><ul><li><p>左侧：来自节点X及其他相关边的初始排名。</p></li><li><p>中间：可能的两跳路径（XAB、XBC、XCD、XAC、XDC），根据方程3被分类为可绕路和不可绕路的。我们使用排名代替距离。<br>  $$<br>  (eX→Z, eZ→Y ) s.t. \max(wX→Z, wZ→Y ) &lt; wX→Y<br> $$</p><blockquote><p> 直接边就不是最优路径，可以被视为可绕路的</p></blockquote></li><li><p>右侧：连接到节点X的每个节点的可绕路路径数量。根据可绕路路径数量，从列表末尾开始丢弃边。</p></li></ul></li><li><strong>构建反向图</strong><br> 同样的思路构建反向图。 </li><li>融合两张图</li></ol><h2 id="查找"><a href="#查找" class="headerlink" title="查找"></a>查找</h2><p>之前的HNSW一类算法之所以不能满足GPU计算主要原因就是并行度不够，很难去发挥GPU多线程计算的优势。CAGRA不同之处在于在构图的时候尽可能保证了任意两点的可达性，在查找的时候放弃了按照最近路径找到目标节点的优化思路，而是通过提高吞吐量来尽可能覆盖尽可能多的点来提高召回率和GPU利用率。</p><p>这里需要特别提一点就是这里的buffer。其实是两部分的，前半部分top-M的，我猜测是有序的，后半部是候选访问区，不必一定保证有序。</p><img src="/CARGA/query.png" class="" title="alt text"><p>计算过程：</p><ol><li>随机选取E个节点，计算他们与 query 的距离，并存在 candidate buffer 中</li><li>在 top-M buffer（这里应该是上一轮的结果，初始阶段为空） 和 candidate buffer 中选取 top M 个结果存储在 Top-M buffer中  </li><li>在Top-M buffer中选取一个还没有被 traverse 的离 query 最近的节点  </li><li>选取与 Step 3 中选择的节点近邻的E个没有访问的节点，并计算他们与query的距离，然后存储在 Candidate buffer 中<br>一直计算到收敛（topM buffer全部是已访问状态）</li></ol><p>参考：</p><ol><li><a href="https://github.dev/facebookresearch/faiss">https://github.dev/facebookresearch/faiss</a></li><li><a href="https://arxiv.org/pdf/2308.15136">https://arxiv.org/pdf/2308.15136</a></li><li>kimi_chat</li></ol>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;&lt;a href=&quot;https://docs.rapids.ai/api/raft/nightly/pylibraft_api/neighbors/#cagra&quot;&gt;CAGRA&lt;/a&gt; 是 N社在RAFT项目中 最新的 ANN 向量索引。这是一种高性能的、 GPU 加速的、基于</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="ANNs" scheme="https://wanger-sjtu.github.io/tags/ANNs/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>RAG系统构建_技术文档中句子嵌入的挑战</title>
+    <link href="https://wanger-sjtu.github.io/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/"/>
+    <id>https://wanger-sjtu.github.io/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/</id>
+    <published>2024-06-02T14:09:52.000Z</published>
+    <updated>2024-11-06T14:07:20.562Z</updated>
+    
+    <content type="html"><![CDATA[<p>这个是爱立信对RAG pipeline中 retrival阶段的一个实验报告。并得到的一些初步的实验结论。</p><ol><li>sentence embedding 计算的相似度随着文本切分长度增加逐渐变得不可信。</li></ol><p>  他们选取了 10,970条句子，计算了相互之间的余弦相似度。最终形成了下面的Kernel Density Estimate (KDE) 图。</p><p>  从图中可以看到不同句子长度的余弦相似性得分的分布。</p>  <img src="/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/image.png" class="" title="The distribution of similarities across 10974 documents of various sizes split by number  of words in the document"><ol start="2"><li>Table 1 从论文中提供了对实验假设和观察结果的总结。这些假设和观察结果是基于对技术文档进行的检索增强型生成（RAG）系统实验。以下是对Table 1内容的介绍：</li></ol><table><thead><tr><th>Hyp Hypothesis (假设)</th><th>Observation (观察)</th><th>Support (支持样本数)</th></tr></thead><tbody><tr><td>H1 分割定义和定义词有助于查询</td><td>对于定义，使用定义词和定义分别进行检索可以获得更好的性能</td><td>22 of 30 queries (ID 2, 3)</td></tr><tr><td>H2 不应使用相似度分数来比较检索结果</td><td>观察到不同方法之间的相似度分数不可比，且正确答案的绝对值通常很小</td><td>24 of 30 queries (ID 2, 3)</td></tr><tr><td>H3 关键词的位置影响结果</td><td>关键词越靠近句首，检索准确度越高</td><td>25 of 30 queries (ID 1, 4, 5, 6)</td></tr><tr><td>H4 基于句子的相似度更好</td><td>基于句子和不同段落的相似度检索可以为生成器提供更详细的上下文</td><td>ID F1 - Table 2 (8 of 10 queries)</td></tr><tr><td>H5 生成器对基于句子的相似度</td><td>使用基于句子的相似度和基于段落的检索生成的答案更好</td><td>8 of 10 queries (App. Table 3 - ID F1)</td></tr><tr><td>H6 包含缩写词的定义表现不佳</td><td>生成的答案常常只是展开或提供缩写词，这并不有用</td><td>15 of 16 queries (App. Table 3 - ID F2, F3)</td></tr><tr><td>H7 检索段落的顺序对生成器结果的影响</td><td>实验中我们没有观察到检索段落的顺序对生成器结果产生影响</td><td>NA</td></tr></tbody></table><p>  这个表格展示了作者们在实验中提出的七个假设以及通过实验得到的观察结果。每个假设后面都列出了支持该假设的样本查询数量和具体ID。例如，假设H1表明，如果将定义和定义词分开进行检索，可以提高查询的性能，这一点在30个查询中的22个得到了验证（具体查询ID为2和3）。</p><p>  这些观察结果对于理解技术文档RAG系统的设计和改进至关重要，因为它们揭示了在实际应用中可能遇到的问题和有效的解决策略。</p><p>参考链接：</p><ol><li><a href="https://arxiv.org/pdf/2404.00657">https://arxiv.org/pdf/2404.00657</a></li></ol>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;这个是爱立信对RAG pipeline中 retrival阶段的一个实验报告。并得到的一些初步的实验结论。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;sentence embedding 计算的相似度随着文本切分长度增加逐渐变得不可信。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;  他们选取了 10,9</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="RAG" scheme="https://wanger-sjtu.github.io/tags/RAG/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Bi-encoder vs Cross encoder? When to use which one?</title>
+    <link href="https://wanger-sjtu.github.io/encoder-cross-bi/"/>
+    <id>https://wanger-sjtu.github.io/encoder-cross-bi/</id>
+    <published>2024-06-02T05:21:04.000Z</published>
+    <updated>2024-11-06T14:07:20.570Z</updated>
+    
+    <content type="html"><![CDATA[<p>Bi-encoder和Cross-encoder是在自然语言理解任务模型的两种不同方法，在信息检索和相似性搜索二者的使用更为广泛。在LLM大火的今天，RAG的pipe line中这两个模块作为提升检索精度的模块更是备受瞩目。</p><img src="/encoder-cross-bi/compare.png" class="" title="Bi_vs_Cross-Encoder"><table><thead><tr><th></th><th>Bi-encoder</th><th>Cross-encoder</th></tr></thead><tbody><tr><td>架构</td><td>有两个<strong>独立</strong>的编码器 —— 一个用于编码输入的查询，另一个用于编码候选文档。这些编码器独立工作，为查询和每个文档生成嵌入表示。</td><td>查询和文档一起在<strong>单个</strong>编码器中处理。这意味着模型将查询和文档作为输入，并产生联合表示</td></tr><tr><td>训练方式</td><td>在训练期间，模型被训练以最大化查询与相关文档之间的相似性，同时最小化查询与不相关文档之间的相似性。训练通常使用对比损失函数进行。</td><td>与Bi-encoder类似，Cross-encoder被训练以最大化相关查询-文档对之间的相似性。但是，由于它们同时处理查询和文档，因此它们捕获了两者之间的交互。</td></tr><tr><td>使用</td><td>在推理时，模型独立计算查询与每个文档之间的相似性得分。相似性得分最高的文档被认为是最相关的。</td><td>Cross-encoder为每个查询-文档对生成单一的相似性得分，考虑了查询和文档嵌入之间的交互。得分最高的文档被认为是最相关的。</td></tr></tbody></table><h2 id="使用哪个："><a href="#使用哪个：" class="headerlink" title="使用哪个："></a>使用哪个：</h2><ul><li><p>Bi-encoder：当您拥有大规模数据集和计算资源时，使用Bi-encoder。由于相似性得分可以独立计算，它们在推理期间通常更快。它们适用于<strong>捕获查询和文档之间复杂交互不太关键</strong>的任务。</p></li><li><p>Cross-encoder：当捕获<strong>查询和文档之间的交互对于您的任务至关重要</strong>时，请选择Cross-encoder。它们在<strong>计算上更为密集</strong>，但可以在理解查询和文档之间的上下文或关系至关重要的场景中提供更好的性能。</p></li></ul><h2 id="讨论"><a href="#讨论" class="headerlink" title="讨论"></a>讨论</h2><ol><li><p>为什么embedding 在RAG中常常失真？还需要rerank模型来做二次处理。</p><blockquote><p>虽然训练上二者都是度量学习的思路，但在推理判断阶段，还是有很大区别的。</p><ul><li>embedding 模型在获取embeding向量时，仅仅考虑了当前的文本，rerank模型则是把query跟相关的文档信息一起做了比较。</li><li>sentence embedding vector 本质上还是word的建模，无论pooling方式如何，重合的关键词越多，一般来说最终也越相近。rerank模型则是在最后学习一个映射，输出的就是0-1的相似性判断。简单来说就是rerank功能更明确，效果也更好。</li></ul></blockquote></li><li><p>embedding 模型和rerank模型是否只有训练架构上的区别？在模型结构上有没有偏好？</p><blockquote><p>当前绝大多数embeding模型都是BERT架构的，rerank模型多数时XLMRobertaForSequenceClassification</p></blockquote></li><li><p>如果一定要rerank模型，是不是可以在一定范围内牺牲embeding的召回精度？选用较小的embedding 模型，但是提高topK。</p></li><li><p>这两类模型的训练细节有哪些？</p></li></ol>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;Bi-encoder和Cross-encoder是在自然语言理解任务模型的两种不同方法，在信息检索和相似性搜索二者的使用更为广泛。在LLM大火的今天，RAG的pipe line中这两个模块作为提升检索精度的模块更是备受瞩目。&lt;/p&gt;
+&lt;img src=&quot;/encoder-c</summary>
+      
+    
+    
+    
+    <category term="技术" scheme="https://wanger-sjtu.github.io/categories/%E6%8A%80%E6%9C%AF/"/>
+    
+    
+    <category term="LLM" scheme="https://wanger-sjtu.github.io/tags/LLM/"/>
+    
+    <category term="RAG" scheme="https://wanger-sjtu.github.io/tags/RAG/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>【转载】一种编译期Map的实现</title>
+    <link href="https://wanger-sjtu.github.io/compile-time-map/"/>
+    <id>https://wanger-sjtu.github.io/compile-time-map/</id>
+    <published>2024-04-21T13:38:32.000Z</published>
+    <updated>2024-11-06T14:07:20.566Z</updated>
+    
+    <content type="html"><![CDATA[<p>本文来自：<a href="https://xuhuisun.com/post/c++-weekly-2-constexpr-map/">c++ weekly</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;本文来自：&lt;a href=&quot;https://xuhuisun.com/post/c++-weekly-2-constexpr-map/&quot;&gt;c++ weekly&lt;/a&gt;&lt;/p&gt;
+</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="c++" scheme="https://wanger-sjtu.github.io/tags/c/"/>
+    
+    <category term="constexpr" scheme="https://wanger-sjtu.github.io/tags/constexpr/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>【转载】爬虫如何通过二维码登录知乎</title>
+    <link href="https://wanger-sjtu.github.io/zhihu-login-qr-code/"/>
+    <id>https://wanger-sjtu.github.io/zhihu-login-qr-code/</id>
+    <published>2024-04-12T14:16:57.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="登录过程分析"><a href="#登录过程分析" class="headerlink" title="登录过程分析"></a>登录过程分析</h1><p>先来到知乎提供二维码登陆的界面，利用F12开发工具，可查看请求这个二维码图片需要那些数据。</p><img src="/zhihu-login-qr-code/image.png" class="" title="alt text"><img src="/zhihu-login-qr-code/image-1.png" class="" title="alt text"><p>能看到是get请求，headers也很寻常，但多次刷新可发现请求的url地址有一部分在改变。寻找前面的文件，能找到这部分动态改变的值 </p><img src="/zhihu-login-qr-code/image-2.png" class="" title="alt text"><p>为了方便阐述，那就把image称为A文件，qrcode称为B文件。</p><p>这里就有了一个思路，先请求B文件，拿到token值以后，拼接成目的url，再去请求A文件</p><h2 id="问题1"><a href="#问题1" class="headerlink" title="问题1"></a>问题1</h2><p>于是我们从A迁移到了B</p><img src="/zhihu-login-qr-code/image-3.png" class="" title="alt text"><p>可见请求B文件的时候，headers字段是真的很多，但绝对不会所有都必要，这只能排除法了</p><p>首先看清楚了，是<strong>POST</strong>请求<br> <img src="/zhihu-login-qr-code/image-4.png" class="" title="alt text"></p><p>复制了所有headers，做一次post的请求，再看看状态码是不是201</p><blockquote><p>（为了避免请求被重定向，建议打印请求内容，或者关闭重定向，后面皆以打印内充处理不再单独提示）</p></blockquote><img src="/zhihu-login-qr-code/image-5.png" class="" title="alt text"><p>可以说很OK，然后就开始排除法，首先去掉的是最常用不到的。通过几轮排除下来，发现Cookie和User-Agent是必要的，既然需要用到cookie，我们就得维持会话，所以要实例化一个session对象了，实现如下： </p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">session = requests.session()</span><br></pre></td></tr></table></figure><p>顺便也把Cookie分解了，看看需要哪些内容</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> item <span class="keyword">in</span> headers[<span class="string">&quot;Cookie&quot;</span>].split(<span class="string">&quot;;&quot;</span>):</span><br><span class="line">    <span class="built_in">print</span>(item.split(<span class="string">&quot;=&quot;</span>)[<span class="number">0</span>])</span><br></pre></td></tr></table></figure> <img src="/zhihu-login-qr-code/image-6.png" class="" title="alt text"><h2 id="问题2"><a href="#问题2" class="headerlink" title="问题2"></a>问题2</h2><p>那么如何让session对象持有完整的cookie呢？<br> <img src="/zhihu-login-qr-code/image-7.png" class="" title="alt text"></p><p>打开开发者工具，刷新页面，然后点击二维码登陆</p><img src="/zhihu-login-qr-code/image-8.png" class="" title="alt text"><p>我们可以看到第一次请求登陆界面的时候，请求是不带cookies的；而请求之后，按照响应体的要求，会设置对应的<code>xsrf</code>，<code>_zap</code>，<code>tgw_17</code>。前面我们知道需要6个，这里才三个肯定是不够的，所以继续找signin后面的文件，看看到底有什么猫腻在里头</p><p>于是在<code>udid</code>这个文件中，你会发现响应体要求设置<code>q_c1</code>，<code>d_c0</code>；也就是说，在成功请求这个文件之后，Cookie就包含这两个部分了<br> <img src="/zhihu-login-qr-code/image-9.png" class="" title="alt text"></p><p>照例复制下完整的headers，找到请求的url，以及请求方式（注意了！这里也是post），最后排除法，找到必要的部分</p><img src="/zhihu-login-qr-code/image-10.png" class="" title="alt text"><p>仍然是Cookie以及User-Agent</p><h2 id="问题-3"><a href="#问题-3" class="headerlink" title="问题 3"></a>问题 3</h2><p>还不够，现在我们的cookies还差<code>capsion_ticket</code>部分，所以继续撸</p><p>于是找到了<code>captcha?lang=cn</code>文件，它的响应体告诉浏览器，可以设置<code>capsion_ticket</code>了<br> <img src="/zhihu-login-qr-code/image-11.png" class="" title="alt text"></p><img src="/zhihu-login-qr-code/image-12.png" class="" title="alt text"><h2 id="开始代码"><a href="#开始代码" class="headerlink" title="开始代码"></a>开始代码</h2><p>有了这波分析，我们就可以开始动手敲代码了</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> requests</span><br><span class="line">session = requests.session()</span><br><span class="line"></span><br><span class="line">HEADERS = &#123;</span><br><span class="line">    <span class="string">&#x27;User-Agent&#x27;</span>: <span class="string">&#x27;Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 \ (KHTML, like Gecko) Chrome/68.0.3440.84 Safari/537.36&#x27;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment"># 第一次请求，为了Cookie(_xsrf，_zap，tgw_17)</span></span><br><span class="line">session.get(url=<span class="string">&quot;https://www.zhihu.com/signin&quot;</span>, headers=HEADERS)</span><br><span class="line"><span class="comment"># 第二次请求，为了Cookie(q_c1，d_c0)</span></span><br><span class="line">session.post(url=<span class="string">&quot;https://www.zhihu.com/udid&quot;</span>, headers=HEADERS)</span><br><span class="line"><span class="comment"># 第三次请求，为了Cookie(capsion_ticket)</span></span><br><span class="line">session.get(url=<span class="string">&quot;https://www.zhihu.com/api/v3/oauth/captcha?lang=cn&quot;</span>, headers=HEADERS)</span><br><span class="line"><span class="comment"># 第四次请求，为了token，用于构建二维码图片的请求链接</span></span><br><span class="line">response = session.post(url=<span class="string">&quot;https://www.zhihu.com/api/v3/account/api/login/qrcode&quot;</span>, headers=HEADERS)</span><br><span class="line"><span class="comment"># print(response.json())</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 第五次请求，为了二维码图片</span></span><br><span class="line">url4QR = <span class="string">&quot;https://www.zhihu.com/api/v3/account/api/login/qrcode/&#123;0&#125;/image&quot;</span>.<span class="built_in">format</span>(response.json().get(<span class="string">&quot;token&quot;</span>))</span><br><span class="line"></span><br><span class="line">response = session.get(url=url4QR, headers=HEADERS)</span><br><span class="line"><span class="keyword">if</span> response.status_code == <span class="number">200</span>:</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;qr.jpg&quot;</span>, <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> file:</span><br><span class="line">        file.write(response.content)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;【保存二维码成功】&quot;</span>)</span><br><span class="line"><span class="keyword">else</span>:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;【请求二维码图片错误】&quot;</span>)</span><br></pre></td></tr></table></figure><p>运行结果如下 </p><img src="/zhihu-login-qr-code/image-13.png" class="" title="alt text"><p>这时候以为扫描二维码就登陆成功了吗？然而没有<br> 我们扫描一下网页的二维码登陆一下试试，会发现在手机上点击确认登陆以后，请求知乎<a href="http://www.zhihu.com网页的时候,cookie又多了一个`z_c0/">www.zhihu.com网页的时候，Cookie又多了一个`z_c0</a> <code>  &#123;% asset_img "image-14.png" "alt text" %&#125; 晕！但是扶住墙，老规矩。可以看到距离知乎首页文件最近的一个</code>scan_info<code>文件，说了要设置</code>z_c0 &#96;<br> <img src="/zhihu-login-qr-code/image-15.png" class="" title="alt text"></p><p>于是在我们扫描二维码之后，应该先请求这个文件，再请求首页文件；查看请求的url，也能发现，这个文件也有一部分是动态的，而且正是之前获取的token<br> <img src="/zhihu-login-qr-code/image-17.png" class="" title="alt text"></p><p>为了确保我们成功登陆，可测试编辑页面，因为这个页面只有在登陆成功后可以访问，不然就会被重定向到登陆页面去<br> <img src="/zhihu-login-qr-code/image-18.png" class="" title="alt text"></p><p>添加代码如下</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 阻塞程序，给予用户扫描二维码的时间</span></span><br><span class="line"><span class="built_in">input</span>(<span class="string">&quot;请随便输入后回车&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 请求scan_info文件，并打印状态码</span></span><br><span class="line"><span class="built_in">print</span>(session.get(<span class="string">&quot;https://www.zhihu.com/api/v3/account/api/login/qrcode/&#123;0&#125;/scan_info&quot;</span>.<span class="built_in">format</span>(token), headers=HEADERS).status_code)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 请求编辑页面</span></span><br><span class="line">response = session.get(<span class="string">&quot;https://www.zhihu.com/people/edit&quot;</span>, headers=HEADERS, allow_redirects=<span class="literal">False</span>)</span><br><span class="line"><span class="keyword">if</span> response.status_code == <span class="number">200</span>:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;登陆成功&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="built_in">print</span>(response.text[:<span class="number">10000</span>])</span><br></pre></td></tr></table></figure><p>成功</p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;登录过程分析&quot;&gt;&lt;a href=&quot;#登录过程分析&quot; class=&quot;headerlink&quot; title=&quot;登录过程分析&quot;&gt;&lt;/a&gt;登录过程分析&lt;/h1&gt;&lt;p&gt;先来到知乎提供二维码登陆的界面，利用F12开发工具，可查看请求这个二维码图片需要那些数据。&lt;/p&gt;
+&lt;img</summary>
+      
+    
+    
+    
+    <category term="转载" scheme="https://wanger-sjtu.github.io/categories/%E8%BD%AC%E8%BD%BD/"/>
+    
+    
+    <category term="爬虫" scheme="https://wanger-sjtu.github.io/tags/%E7%88%AC%E8%99%AB/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>TK 学习法</title>
+    <link href="https://wanger-sjtu.github.io/tk-learn-method/"/>
+    <id>https://wanger-sjtu.github.io/tk-learn-method/</id>
+    <published>2024-04-02T14:24:50.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<p>这是TK分享的学习方法，这里收藏备份一下。重要的是<strong>思路</strong>。</p><blockquote><p>这两天论坛上又有人开始抱怨世风日下，大家都现实了，都不开放了，不交流了。对这种“月经贴”，我基本上已经习惯了，不过因为吃了粉皮炖鸡，心情比较好，于是就说了两句。</p></blockquote><blockquote><p>三四年前，当时我对人性的看法还不像现在这样。有几个人加了我的QQ，说想学Windows，我居然就好为人师起来，自不量力地教人学Windows。我很天真地把自己的经验告诉他们</p></blockquote><blockquote><p>一、先把Windows的帮助文件从头到尾看一遍。</p></blockquote><blockquote><p>二、在Windows目录下搜索*.txt、*.htm?、*.log、*.ini，把每一个文件内容都看一遍。</p></blockquote><blockquote><p>三、把注册表浏览一遍。</p></blockquote><blockquote><p>没有诀窍，也不用花钱买书。任何人把这三步做完之后，只要不是傻子，在Windows应用方面都可以非常熟练。并且如果想进一步学，也自然知道应该去看什么了。</p></blockquote><blockquote><p>结果甚至没有一个人能看完Windows帮助文件，看完三分之一的都没有，都说看不下去。我很奇怪，我看Windows的帮助文件就像看金庸小说一样愉快，怎么会有人觉得辛苦？</p></blockquote><blockquote><p>后来我想明白了：因为我爱她，而他们不爱她，只是想占有她而已。</p></blockquote><blockquote><p>他们要的不是交流，不是开放，甚至也不是想找个人“拜师”，他们想要的不是郭靖遇到的洪七公，而是虚竹遇到的无涯子。</p></blockquote><blockquote><p>再后来，一个偶然的机会，我看到了小四同学写的那篇《你尽力了么？》，才知道原来这不只是我一个人的看法。</p></blockquote><blockquote><p>这两天在家，在笔记本上折腾Linux，遇到了很多问题，我就把内核每一个编译选项的说明都细细看了一遍，反复编译上二十多遍——然后，所有问题的答案都找到了。显然，学Linux和学Windows的方法并没有什么不同。</p></blockquote>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;p&gt;这是TK分享的学习方法，这里收藏备份一下。重要的是&lt;strong&gt;思路&lt;/strong&gt;。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这两天论坛上又有人开始抱怨世风日下，大家都现实了，都不开放了，不交流了。对这种“月经贴”，我基本上已经习惯了，不过因为吃了粉皮炖鸡，心情比较好</summary>
+      
+    
+    
+    
+    <category term="闲聊" scheme="https://wanger-sjtu.github.io/categories/%E9%97%B2%E8%81%8A/"/>
+    
+    
+    <category term="学习" scheme="https://wanger-sjtu.github.io/tags/%E5%AD%A6%E4%B9%A0/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>端侧需要向量数据库吗</title>
+    <link href="https://wanger-sjtu.github.io/vec-ondevice/"/>
+    <id>https://wanger-sjtu.github.io/vec-ondevice/</id>
+    <published>2024-03-29T13:06:45.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<blockquote><p>最近参与的向量数据的技术分析项目什么的基本告一段落了，简单总结一下，在Edge侧实现向量数据的应用场景以及一些问题挑战。</p></blockquote><h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>问题：</p><ul><li>手机上需要不需要一个向量数据？</li><li>如果需要，需要什么样的数据库？支持哪些算法，有哪些约束？</li></ul><h2 id="是不是需要？"><a href="#是不是需要？" class="headerlink" title="是不是需要？"></a>是不是需要？</h2><p>对于第一个问题显然是成立的。近年来各大手机手机厂商在AI能力上的探索越来越深入，AI算法所涉及的业务范围也从最开始的camera场景的计算摄影逐渐扩散到更多的业务。从技术上讲主要有下面几个场景：</p><ul><li>多模态搜索</li><li>LLM大模型</li></ul><h3 id="多模搜索"><a href="#多模搜索" class="headerlink" title="多模搜索"></a>多模搜索</h3><p>多模搜索（图文搜索）业务源于CLIP模型提出和发展。CLIP模型如何去做的，这里就不展开了。通过CLIP模型，可以把图片和文本在同一语义空间内对齐，这就使得通过描述搜图变成可能了。相较于原始的基于Tag搜索，就极大地增强了可能性。</p><blockquote><p> 这里扩展一下，目前看起来，文档搜索反而在多模搜索以后得到应用，就有点奇奇怪怪了。</p></blockquote><p>考虑到未来算法演进，以及手机侧信息的数字化管理的需求，后面肯定是更多模态数据可以相互搜索。向量数据库在其中肯定也要发挥更大的作用。</p><h3 id="LLM大模型"><a href="#LLM大模型" class="headerlink" title="LLM大模型"></a>LLM大模型</h3><p>LLM模型大热，确实吸引了不少人的注意力。但是如果仅仅只能在云测跑，受限于隐私安全的考虑，个性化的需求就很难满足，而模型又很难在本地通过训练来更新知识信息。这就引入了端侧RAG框架的需求。根据当前RAG的技术演进程度来看，向量检索是Retriaval阶段必不可少的一环，特别是未来LLM到LMM演进上，更是如此。因为传统数据库并不是为了多模态数据设计的。</p><blockquote><p>至于其他场景，以后遇到再补充了。</p></blockquote><h2 id="需要什么样的向量数据库"><a href="#需要什么样的向量数据库" class="headerlink" title="需要什么样的向量数据库"></a>需要什么样的向量数据库</h2><p>手机侧不同于云侧，有下面的几个特点。</p><ul><li>ROM空间有限且珍贵，哪个应用（小而美）用着用着占用越来愈大了还容易引发舆情信息</li><li>RAM空间就更金贵了，不能随便说只服务你一个业务就可以</li><li>功耗电量消耗也是需要考虑的</li><li>还有上面业务场景决定，召回率、准确度的要求也是越高越好</li><li>删改实时性有要求，不能一直不加、也不能一直不删</li></ul><p><strong>简单说就是：资源要节省、准确度要高</strong>、时延倒是重要但没那么重要的部分了</p><h3 id="算法怎么选"><a href="#算法怎么选" class="headerlink" title="算法怎么选"></a>算法怎么选</h3><ul><li>从上面的约束可以看出，云侧用的多的NSW、HNSW等基于图的算法就不是很能满足要求了，构建、删除成本高、内存占用大。</li><li>PQ这类量化算法内存占用虽然低了，如果bit数选取太低了，掉点严重，能不用尽量别用</li><li>LSH、kNN-Tree这些，效果也不咋地</li><li>IVF-算法，牺牲一点时间，降低计算量和内存。可以考虑</li><li>NN降维、PCA降维等算法，可以考虑组合使用。</li></ul><blockquote><p>理论上来说，这里量化策略选择接近与NN模型的量化，底库向量等价于权重。但是还没有实验验证了。</p></blockquote><h2 id="向量数据库计算"><a href="#向量数据库计算" class="headerlink" title="向量数据库计算"></a>向量数据库计算</h2><p>既然需要了，那就可以来实现一个向量数据库了。下面就看下，向量数据计算的特点吧。</p><h3 id="检索"><a href="#检索" class="headerlink" title="检索"></a>检索</h3><p>传统意义上来看，检索就是一个向量和一个矩阵做一个相似度计算。是一个<code>sgemv</code> 的计算过程。属于一种计算密度比较低的计算场景，适合vector计算单元发挥作用。</p><p>在LLM交互的场景结果略有不同，从用户对话的角度来看，很多时候用户一次的问题是片面的，仅仅凭借这一个query向量，召回的相关信息不不太足的。这就涉及到了query rewrite，经过rewrite以后就成了一个multi-query 场景了，这样计算密度就大大增加。变成一个比较适合NPU计算的场景了。</p><blockquote><p>这里参考一下，langchain 的<a href="http://python.langchain.com/docs/modules/data_connection/retrievers/MultiQueryRetriever">MultiQueryRetriever</a> </p></blockquote><h3 id="构建"><a href="#构建" class="headerlink" title="构建"></a>构建</h3><p>这里把构建过程单独拿出来说，主要是构建算法会涉及到k-means聚类，这时候参与计算的向量就多了，计算密度也大了。</p><h3 id="降维"><a href="#降维" class="headerlink" title="降维"></a>降维</h3><p>降维算法包括非NN类的，比如SVD、PCA这种，也有NN类的，比如VAE这类。</p><h3 id="向量计算库-需要什么样的ASIC"><a href="#向量计算库-需要什么样的ASIC" class="headerlink" title="向量计算库 需要什么样的ASIC"></a>向量计算库 需要什么样的ASIC</h3><ul><li>上面可以看出来，当前大多数调用频繁的场景来看，实际的计算密度并不高，gemv的计算走CPU的neon也足够了，只有在大计算量的情况下，走专用的计算单元才有优势。</li><li>不可否认的一点就是，专用计算单元在能效是有优势的</li><li>如果从计算时延上来，Android系统架构下，必须ION内存；从CPU到专用的计算单元之间也会引入额外的时延开销；这就要求走ASIC的话，需要在这中间做好文章，才好有优势</li></ul><h3 id=""><a href="#" class="headerlink" title=""></a></h3>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;blockquote&gt;
+&lt;p&gt;最近参与的向量数据的技术分析项目什么的基本告一段落了，简单总结一下，在Edge侧实现向量数据的应用场景以及一些问题挑战。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h1 id=&quot;背景&quot;&gt;&lt;a href=&quot;#背景&quot; class=&quot;headerlink&quot; </summary>
+      
+    
+    
+    
+    <category term="闲聊" scheme="https://wanger-sjtu.github.io/categories/%E9%97%B2%E8%81%8A/"/>
+    
+    
+    <category term="ANN" scheme="https://wanger-sjtu.github.io/tags/ANN/"/>
+    
+    <category term="vecdb" scheme="https://wanger-sjtu.github.io/tags/vecdb/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>国内环境配置pyppeteer</title>
+    <link href="https://wanger-sjtu.github.io/pyppeteer-install/"/>
+    <id>https://wanger-sjtu.github.io/pyppeteer-install/</id>
+    <published>2024-03-29T12:49:25.000Z</published>
+    <updated>2024-11-06T14:07:20.578Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>pyppeteer 是 puppeteer 的 python 版本，实现了大部分接口，因为使用了异步await等关键字，需要 python3.6+，具体作用自行百度。</p><p>因初次运行默认需要从国外下载 chromium 到指定路径，不适合国内，所以写了这篇文章方便小伙伴们在国内进行配置。</p><p>附上官方文档，英语好的小伙伴们可自行配置。</p><p>windows下的安装和配置</p><p>1、使用豆瓣源安装pyppeteer：</p><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install -i https://pypi.douban.com/simple/ pyppeteer</span><br></pre></td></tr></table></figure><p>2、添加环境变量，更改下载 chromium 的来源网站和执行路径：</p><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PYPPETEER_DOWNLOAD_HOST，对应值为http://npm.taobao.org/mirrors</span><br></pre></td></tr></table></figure><p>也可以在<code>import pyppeteer</code>之前在代码中设置</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> os</span><br><span class="line">os.environ[<span class="string">&quot;PYPPETEER_DOWNLOAD_HOST&quot;</span>] = <span class="string">&quot;http://npm.taobao.org/mirrors&quot;</span></span><br></pre></td></tr></table></figure><p>3、在cmd终端进入 python&#x2F;ipython 环境，执行以下代码查看：</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> pyppeteer</span><br><span class="line"><span class="comment"># chromium执行目录</span></span><br><span class="line">pyppeteer.chromium_downloader.chromiumExecutable.get(<span class="string">&#x27;win64&#x27;</span>)</span><br><span class="line"><span class="comment"># 下载chromium的url地址</span></span><br><span class="line">pyppeteer.chromium_downloader.downloadURLs.get(<span class="string">&#x27;win64&#x27;</span>)</span><br></pre></td></tr></table></figure><p>正常情况下这里会打印出执行目录的地址和下载地址。</p><p>用下面的代码测试的话也会自动下载对应的浏览器文件。</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"><span class="keyword">from</span> pyppeteer <span class="keyword">import</span> launch</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    browser = <span class="keyword">await</span> launch()</span><br><span class="line">    page = <span class="keyword">await</span> browser.newPage()</span><br><span class="line">    <span class="keyword">await</span> page.goto(<span class="string">&#x27;https://www.baidu.com/&#x27;</span>)</span><br><span class="line">    <span class="keyword">await</span> page.screenshot(&#123;<span class="string">&#x27;path&#x27;</span>: <span class="string">&#x27;baidu.png&#x27;</span>&#125;)</span><br><span class="line">    <span class="keyword">await</span> browser.close()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">asyncio.get_event_loop().run_until_complete(main())</span><br></pre></td></tr></table></figure><p>但是实际并非如此，由于python包中的版本与实际镜像的版本偶尔会出现不一致的情况，会下载失败。<br>这时候可以看下远程镜像的归档有哪些版本，自己在代码中改成对应的即可。</p><p><a href="https://registry.npmmirror.com/binary.html?path=chromium-browser-snapshots/Win_x64/">https://registry.npmmirror.com/binary.html?path=chromium-browser-snapshots/Win_x64/</a></p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h2 id=&quot;前言&quot;&gt;&lt;a href=&quot;#前言&quot; class=&quot;headerlink&quot; title=&quot;前言&quot;&gt;&lt;/a&gt;前言&lt;/h2&gt;&lt;p&gt;pyppeteer 是 puppeteer 的 python 版本，实现了大部分接口，因为使用了异步await等关键字，需要 python3</summary>
+      
+    
+    
+    
+    <category term="python" scheme="https://wanger-sjtu.github.io/categories/python/"/>
+    
+    
+    <category term="python" scheme="https://wanger-sjtu.github.io/tags/python/"/>
+    
+  </entry>
+  
+</feed>

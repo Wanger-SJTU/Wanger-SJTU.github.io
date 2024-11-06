@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>SSD筆記 - 第六篇 結論 | 一只特立独行的猪</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script src="https://www.googletagmanager.com/gtag/js?id=G-D0GZY9PECP" async></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-D0GZY9PECP');
+</script><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><meta name="generator" content="Hexo 6.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">SSD筆記 - 第六篇 結論</h1><a id="logo" href="/.">一只特立独行的猪</a><p class="description">既然我存在，就不能装作不存在</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/tags"><i class="fa fa-tag"> 标签</i></a><a href="/categories"><i class="fa fa-tag"> 分类</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">SSD筆記 - 第六篇 結論</h1><div class="post-meta">2024-09-22<span> | </span><span class="category"><a href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><h1 id="前情提要"><a href="#前情提要" class="headerlink" title="前情提要"></a>前情提要</h1><p>第六篇，這篇就是把五篇的重點做個摘錄。</p>
+<h2 id="基礎"><a href="#基礎" class="headerlink" title="基礎"></a>基礎</h2><ol>
+<li>SSD（solid state drive) 是基於 flash NAND memory 製作的儲存裝置。資料（Bits)儲存在不同種類的 cell 裡，當時有 SLC, MLC, TLC，分別代表一個 cell 裡面可存 1, 2, 3 個 bit(s)，並有不同的讀寫時間、壽命等特性。</li>
+<li>每個 Cell 有 P&#x2F;E (Program&#x2F;Erase) cycles 次數限制，超過了該 Cell 就不能用了。意味著 SSD 裝置會隨著使用過程損耗、有“可預期”的使用年限。</li>
+<li>效能評定 (Benchmarking) 很難做。原廠及第三方的報告都要多看多比較，別輕易相信他們的數字。可以的話自己買了做一次效能測試。並確定你了解效能指標的意義，且該數據有達到你的需求。</li>
+</ol>
+<h2 id="Pages-and-blocks"><a href="#Pages-and-blocks" class="headerlink" title="Pages and blocks"></a>Pages and blocks</h2><ol>
+<li><p>鄰近的cell會再組成可被讀寫的最小單位 page, nand-flash 的 page&#x2F;分頁 大小 2, 4, 8, 16 KB 不等。 鄰近的 page 則會組成 block，通常是 128, 256 個 page 為一 block，因而 block 大小有 256 KB 到 4MB 不等。如 Sxxsung SSD 840 block &#x3D; 2048 KB, 由 256 個 8 KB page 組成。</p>
+</li>
+<li><p>即便你只在作業系統讀了一個 byte，SSD 的低消還是要讀一個 page。</p>
+</li>
+<li><p>寫入&#x2F;write 一個 page 也稱為 program，上面提到的為寫一點資料要寫一堆的現象也稱為 write amplification &#x2F; 寫入放大。</p>
+</li>
+<li><p>page 不能直接被複寫。nand-flash 只有在進入 “free” state 才能被寫。在我們寫入一筆資料的時候我們需要先讀出現有內容到暫存器&#x2F;register，然後再寫到其他的 free 的 page 裡，原先的 page 會被進入 “stale” state，並等待被清理，這種操作模式稱為 “copy-modify-write”</p>
+<blockquote>
+<p>zfs 以及一些作業系統也有類似的術語 <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Copy-on-write">copy-on-write</a>，沒什麼相關就是了。</p>
+</blockquote>
+</li>
+<li><p>erase 必須以 block 為單位 (Erases are aligned on block size):<br>page stale 之後必須要清除&#x2F;erase 才能回到 free 狀態</p>
+</li>
+</ol>
+<h2 id="SSD-控制器與其原理"><a href="#SSD-控制器與其原理" class="headerlink" title="SSD 控制器與其原理"></a>SSD 控制器與其原理</h2><ol>
+<li><p>FTL Flash Translation layer<br>FTL 是 SSD controller 工作之一，負責把 host interface 的 Logical Block Addresses (LBA) 轉 Physical Block Addresses (PBA)。最近很多 controller 實作 hybrid log-block mapping，讓隨機寫入的行為像是 log-structured file systems ，寫入行為像是 循序寫入 (sequential write)。</p>
+</li>
+<li><p>internel parallelism<br>controller 內有同時寫入許多 block 到不同的 nand-flash 晶片的機制，此寫入機制&#x2F;單位 clustered block。</p>
+</li>
+<li><p>Wear leveling<br>FTL 的一個功能是讓各個 block 的 P&#x2F;E cycle 接近，大家約在同個時間壞掉。</p>
+</li>
+<li><p>GC &#x2F; Garbage collection 處理垃圾<br>controller 的 GC 流程會把 stale page 清除，回到 free state, 以備下次資料寫入。</p>
+</li>
+<li><p>background&#x2F; 背景作業的 GC 會影響前台 (foreground) 的寫入效能</p>
+</li>
+</ol>
+<h2 id="建議的-SSD-操作姿勢"><a href="#建議的-SSD-操作姿勢" class="headerlink" title="建議的 SSD 操作姿勢"></a>建議的 SSD 操作姿勢</h2><ol>
+<li><p>避免多次寫入小於 page size 的資料。避免 read-modify-write, write amplification. page size 愈大愈好</p>
+</li>
+<li><p>align write, 盡量寫入以 page size 為單位的資料</p>
+</li>
+<li><p>為提升 throughput 盡量把小的寫入 cache 到記憶體，在適當實際一次批次寫入。</p>
+<blockquote>
+<p>這個應該是設計資料庫或是有極端效能考量的系統時的需求</p>
+</blockquote>
+</li>
+<li><p>讀取效率跟寫入行為有關，當我們批次寫入資料時 SSD controller 會把資料平行寫入、四散在各個 nand flash chip 之間。寫入資料時將日後可能會一起讀取的資料排在一起寫會有助於讀取效能</p>
+<blockquote>
+<p>感覺有點難，所以規劃架構的時候用 VM 來區分各個應用程式，如資料庫、web server 分離可以較有效運用到這點。 你說 docker, k8s container? 可能也有吧… 我不太確定(TODO)</p>
+</blockquote>
+</li>
+<li><p>讀寫分離<br>當我們在 SSD 上進行大量小的讀寫穿插 (interleaved) 的操作時會讓 controller 內有的 cache, readahead 機制失效，效能低落。例如如果你有 1000 個 檔案需要讀寫，一個個讀寫跟一次讀 1000 個完了以後再寫，後者效能較好。 </p>
+<blockquote>
+<p>zfs 也有 zil, l2arc 讀寫 cache 分離的機制。  “the L2ARC for random reads, and the ZIL for writes.” [2](#zfs cache-l2arc)</p>
+</blockquote>
+</li>
+<li><p>當你要刪資料的時候最好是批次、一次性刪，好讓 controller GC 有更多空間可以操作，降低 SSD 內部資料碎片化 fragmentation。</p>
+</li>
+<li><p>隨機寫入不一定比循序寫入慢<br>寫入的檔案小的時候會慢，但檔案跟 clustered block 同大時可以利用到 ssd 內部的平行機制，效能跟 sequential weite 差不多好</p>
+</li>
+<li><p>單執行緒、一次讀很多資料的操作比同時跑很多 thread 的讀取操作更能利用到 readahead 的機制。因為有可能 LBA 剛好都在同個 flash chip，還是要排隊才能拿到資料。很多時候反而單執行緒讀取可以更好的運用到 readahead buffer</p>
+</li>
+<li><p>寫入情況同上面一條，single threaded large write is better</p>
+</li>
+<li><p>如果大量小的資料沒辦法批次或是快取寫入的操作，那還是用多執行緒來寫</p>
+</li>
+<li><p>冷熱分離<br>常改的資料（熱的）放在一起，因為 read-modify-write 特性的關係，冷資料會跟熱的混在一塊，wear leveling 也會一起做，盡可能分開兩類資料能讓 GC 更好做事。</p>
+</li>
+<li><p>熱資料、常改的 metadata 最好有做緩存(buffered) cache 在記憶體裡，並避免寫到 SSD 裡。</p>
+</li>
+</ol>
+<h2 id="系統最佳化"><a href="#系統最佳化" class="headerlink" title="系統最佳化"></a>系統最佳化</h2><ol>
+<li><p>PCI Express, 企業級的 SAS 比 SATA 效能好，host interface 先天限制。</p>
+<blockquote>
+<p>可是最近 HPE SAS <a href="ttps://blocksandfiles.com/2019/11/25/hpe-issues-firmware-fix-to-to-stop-ssd-failure/">爆了一次</a></p>
+</blockquote>
+</li>
+<li><p>Over-provisioning 分割硬碟的時候別把空間全用完，例如留 10~15% 給 GC 運作空間可以提升使用壽命，controller 還是會把那個空間拿來做 wear leveling 等事。如果有更大量寫入需求可以考慮拉大到 25 %</p>
+</li>
+<li><p>開啟 trim 指令，作業系統核心、檔案系統可以通知 SSD controller 某個 block 沒在用，讓 controller 進行 GC 作業。</p>
+</li>
+<li><p>align the partition<br>確定硬碟格式化時確定分割區與 實體 page 的位置有對齊很重要 <a target="_blank" rel="noopener" href="https://tytso.livejournal.com/2009/02/20/">ref</a></p>
+</li>
+</ol>
+<h1 id="結論"><a href="#結論" class="headerlink" title="結論"></a>結論</h1><p>想了解更多的話，作者建議可以再去看 2-5 的參考資料。另外 FAST conference（USENIX conference on file and storage) 也可以看看，了解時事動態。</p>
+<h1 id="參考資料"><a href="#參考資料" class="headerlink" title="參考資料"></a>參考資料</h1><h4 id="coding-for-ssd-part6"><a href="#coding-for-ssd-part6" class="headerlink" title="coding for ssd part6"></a>coding for ssd part6</h4><p><a target="_blank" rel="noopener" href="http://codecapsule.com/2014/02/12/coding-for-ssds-part-6-a-summary-what-every-programmer-should-know-about-solid-state-drives/">http://codecapsule.com/2014/02/12/coding-for-ssds-part-6-a-summary-what-every-programmer-should-know-about-solid-state-drives/</a></p>
+<h4 id="zfs-cache-l2arc"><a href="#zfs-cache-l2arc" class="headerlink" title="zfs cache-l2arc"></a>zfs cache-l2arc</h4><p><a target="_blank" rel="noopener" href="http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html">http://www.brendangregg.com/blog/2008-07-22/zfs-l2arc.html</a></p>
+</div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>SSD筆記 - 第六篇 結論</p><p><span>文章作者：</span>王二</p><p><span>发布时间：</span>2024-09-22</p><p><span>最后更新：</span>2024-11-06</p><p><span>原始链接：</span><a href="/ssd-notes-06/">https://wanger-sjtu.github.io/ssd-notes-06/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="https://wanger-sjtu.github.io/ssd-notes-06/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 BY-NC-SA 许可协议。转载请注明出处！</p></div><br><div class="tags"><ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/ssd/" rel="tag">ssd</a></li></ul></div><div class="post-nav"><a class="next" href="/ssd-notes-05/">SSD筆記 - 第五篇 access pattern, 系統配置</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: '25c52264eb62b88a09d0',
+  clientSecret: '08dd790dcadb5826a40004b55e56414d2f477734',
+  repo: 'wanger-sjtu.github.io',
+  owner: 'wanger-sjtu',
+  admin: ['wanger-sjtu'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="https://wanger-sjtu.github.io"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="关于"><img class="nofancybox" src="/img/avatar.jpg"/></a><p>除了这只猪，还没见过谁敢于如此无视对生活的设置。</p><a class="info-icon" href="https://github.com/Wanger-SJTU" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/paper/">paper</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/python/">python</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%AB%9E%E5%88%86/">竞分</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%B0%E5%BD%95/">记录</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%97%B2%E8%81%8A/">闲聊</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/%E4%BD%93%E7%B3%BB%E7%BB%93%E6%9E%84/" style="font-size: 15px;">体系结构</a> <a href="/tags/TVM/" style="font-size: 15px;">TVM</a> <a href="/tags/ANN/" style="font-size: 15px;">ANN</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/ANNs/" style="font-size: 15px;">ANNs</a> <a href="/tags/CPU/" style="font-size: 15px;">CPU</a> <a href="/tags/LLM/" style="font-size: 15px;">LLM</a> <a href="/tags/SD/" style="font-size: 15px;">SD</a> <a href="/tags/shell/" style="font-size: 15px;">shell</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/Deep-Learning/" style="font-size: 15px;">Deep Learning</a> <a href="/tags/RAG/" style="font-size: 15px;">RAG</a> <a href="/tags/CPP/" style="font-size: 15px;">CPP</a> <a href="/tags/CI/" style="font-size: 15px;">CI</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/constexpr/" style="font-size: 15px;">constexpr</a> <a href="/tags/cuda/" style="font-size: 15px;">cuda</a> <a href="/tags/lecture/" style="font-size: 15px;">lecture</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/DL/" style="font-size: 15px;">DL</a> <a href="/tags/%E6%95%B0%E5%80%BC%E7%B2%BE%E5%BA%A6/" style="font-size: 15px;">数值精度</a> <a href="/tags/%E6%8A%80%E6%9C%AF/" style="font-size: 15px;">技术</a> <a href="/tags/%E7%AB%9E%E5%88%86/" style="font-size: 15px;">竞分</a> <a href="/tags/NDK/" style="font-size: 15px;">NDK</a> <a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/ssd/" style="font-size: 15px;">ssd</a> <a href="/tags/%E5%AD%A6%E4%B9%A0/" style="font-size: 15px;">学习</a> <a href="/tags/vecdb/" style="font-size: 15px;">vecdb</a> <a href="/tags/%E7%88%AC%E8%99%AB/" style="font-size: 15px;">爬虫</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-06/">SSD筆記 - 第六篇 結論</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-05/">SSD筆記 - 第五篇 access pattern, 系統配置</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-04/">SSD筆記 - 第四篇 FTL 其他功能及平行機制</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-03/">ssd_notes_03</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-02/">SSD笔记-第二篇SSD结构与性能评估概述</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-01/">SSD笔记- 第一篇引言</a></li><li class="post-list-item"><a class="post-list-link" href="/fp16-err/">fp16 的累加误差有多大</a></li><li class="post-list-item"><a class="post-list-link" href="/cuda-mode-1/">cuda_mode_1</a></li><li class="post-list-item"><a class="post-list-link" href="/llm-sparse/">端侧 LLM 的PD分离技术之稀疏性</a></li><li class="post-list-item"><a class="post-list-link" href="/fast-dequant/">Nvidia 的快速反量化操作</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2024 <a href="/." rel="nofollow">一只特立独行的猪.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>

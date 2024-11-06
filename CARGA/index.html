@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>Nivdia向量数据库图检索最新标杆——CAGRA | 一只特立独行的猪</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script src="https://www.googletagmanager.com/gtag/js?id=G-D0GZY9PECP" async></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-D0GZY9PECP');
+</script><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><meta name="generator" content="Hexo 6.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Nivdia向量数据库图检索最新标杆——CAGRA</h1><a id="logo" href="/.">一只特立独行的猪</a><p class="description">既然我存在，就不能装作不存在</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/tags"><i class="fa fa-tag"> 标签</i></a><a href="/categories"><i class="fa fa-tag"> 分类</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Nivdia向量数据库图检索最新标杆——CAGRA</h1><div class="post-meta">2024-06-16<span> | </span><span class="category"><a href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><p><a target="_blank" rel="noopener" href="https://docs.rapids.ai/api/raft/nightly/pylibraft_api/neighbors/#cagra">CAGRA</a> 是 N社在RAFT项目中 最新的 ANN 向量索引。这是一种高性能的、 GPU 加速的、基于图的方法，尤其是针对<strong>小批量情况进行了优化</strong>，其中每次查找只包含一个或几个查询向量。</p>
+<p>与其他像HNSW、SONG等这类基于图的方法相似，CAGRA在索引训练阶段构建了一个经过优化的 k-最近邻（k-NN）图。这个图具备多种优良特性，能够在保持合理召回率的同时实现高效的搜索。与NSW、HNSW算法不同的是，CARGA算法是单层的图，为了适用GPU计算加速，在构建和查询阶段做了特殊的优化。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> raft::neighbors;</span><br><span class="line"><span class="comment">// use default index parameters based on shape of the dataset</span></span><br><span class="line">ivf_pq::index_params build_params =   ivf_pq::index_params::<span class="built_in">from_dataset</span>(dataset);</span><br><span class="line">ivf_pq::search_params search_params;</span><br><span class="line"><span class="keyword">auto</span> knn_graph      = raft::<span class="built_in">make_host_matrix</span>&lt;IdxT, IdxT&gt;(dataset.<span class="built_in">extent</span>(<span class="number">0</span>), <span class="number">128</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// create knn graph</span></span><br><span class="line">cagra::<span class="built_in">build_knn_graph</span>(res, dataset, knn_graph.<span class="built_in">view</span>(), <span class="number">2</span>, build_params, search_params);</span><br><span class="line"><span class="keyword">auto</span> optimized_gaph = raft::<span class="built_in">make_host_matrix</span>&lt;IdxT, IdxT&gt;(dataset.<span class="built_in">extent</span>(<span class="number">0</span>), <span class="number">64</span>);</span><br><span class="line">cagra::<span class="built_in">optimize</span>(res, dataset, knn_graph.<span class="built_in">view</span>(), optimized_graph.<span class="built_in">view</span>());</span><br><span class="line"><span class="comment">// Construct an index from dataset and optimized knn_graph</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">auto</span> index = cagra::<span class="built_in">index</span>&lt;T, IdxT&gt;(res, build_params.<span class="built_in">metric</span>(), dataset,</span><br><span class="line">                                   optimized_graph.<span class="built_in">view</span>());</span><br></pre></td></tr></table></figure>
+
+<p>CAGRA构建的图有几个不同之处：</p>
+<ul>
+<li>每个节点有固定的出度</li>
+<li>构建的图是一个有向图</li>
+<li>不同于HNSW，CAGRA构建的图是单层的</li>
+</ul>
+<h2 id="构建"><a href="#构建" class="headerlink" title="构建"></a>构建</h2><p>为了满足GPU加速的要求，并行度要高、且召回率也要准确，构建的图得满足：</p>
+<ol>
+<li><p><strong>任意节点间的遍历能力</strong>：这是为了确保图中的所有节点都是相互可达的。如果一个图中存在某些节点无法从其他节点访问，那么这些孤立的节点在搜索过程中将永远不会被考虑，这可能导致搜索结果的不完整或不准确。确保所有节点都是相互可达的，有助于提高搜索算法的覆盖率和准确性。</p>
+</li>
+<li><p><strong>指定遍历次数内的节点访问数量</strong>：这个指标用来衡量从任一节点出发，在有限的步骤内能够探索到的节点的多样性和数量。在ANNS中，通常希望在较少的遍历步骤内能够访问到更多的节点，这样可以更快地找到可能的最近邻。如果一个节点在几步之内能够访问到很多其他节点，那么搜索算法的效率和召回率（即找到真正最近邻的概率）可能会更高。</p>
+</li>
+</ol>
+<p>所以就涉及到了图构建过程中的优化目标：</p>
+<ul>
+<li><p><strong>强连通分量（Strong Connected Components, CC）</strong> 的个数<br>  通过计算图中的强连通分量数量来评估图中任意节点是否能够到达其他任意节点。强连通分量是图中的子图，其中每个节点都可以直接或间接地到达子图中的任何其他节点。</p>
+<blockquote>
+<p>A smaller number of strong CC are preferred because a larger number of CC can lead to more unreachable nodes starting from a search start node.
+  </p>
+</blockquote>
+</li>
+<li><p><strong>平均 2 跳节点数（Average 2-hop Node Count）</strong>：<br>  这个指标衡量的是从任一节点在两次遍历内能够到达的节点数量，用以评估在特定搜索迭代步骤中可以探索的节点数量。</p>
+</li>
+</ul>
+<h3 id="构建过程"><a href="#构建过程" class="headerlink" title="构建过程"></a>构建过程</h3><img src="/CARGA/image.png" class="" title="alt text">
+
+<p>CAGRA算法的构建训练过程，先初始化一个knn graph，然后优化其中的边关系。</p>
+<ol>
+<li>初始knn-graph创建：比较简单，这里实际上可以理论上依赖任何一种已有的算法，但在实现上选了IVF-PQ、和NN-Descent算法。这里就不过多展开了<blockquote>
+<p>步骤一结束后，每个节点都有k个邻居节点，并且通常按距离排序</p>
+</blockquote>
+</li>
+<li>基于<strong>rank</strong>的重排序：这里每个节点出边按照初始rank重新排序，并且过滤掉一些边 <img src="/CARGA/reorder.png" class="" title="alt text">
+<ul>
+<li><p>左侧：来自节点X及其他相关边的初始排名。</p>
+</li>
+<li><p>中间：可能的两跳路径（XAB、XBC、XCD、XAC、XDC），根据方程3被分类为可绕路和不可绕路的。我们使用排名代替距离。<br>  $$<br>  (eX→Z, eZ→Y ) s.t. \max(wX→Z, wZ→Y ) &lt; wX→Y<br> $$</p>
+<blockquote>
+<p> 直接边就不是最优路径，可以被视为可绕路的</p>
+</blockquote>
+</li>
+<li><p>右侧：连接到节点X的每个节点的可绕路路径数量。根据可绕路路径数量，从列表末尾开始丢弃边。</p>
+</li>
+</ul>
+</li>
+<li><strong>构建反向图</strong><br> 同样的思路构建反向图。 </li>
+<li>融合两张图</li>
+</ol>
+<h2 id="查找"><a href="#查找" class="headerlink" title="查找"></a>查找</h2><p>之前的HNSW一类算法之所以不能满足GPU计算主要原因就是并行度不够，很难去发挥GPU多线程计算的优势。CAGRA不同之处在于在构图的时候尽可能保证了任意两点的可达性，在查找的时候放弃了按照最近路径找到目标节点的优化思路，而是通过提高吞吐量来尽可能覆盖尽可能多的点来提高召回率和GPU利用率。</p>
+<p>这里需要特别提一点就是这里的buffer。其实是两部分的，前半部分top-M的，我猜测是有序的，后半部是候选访问区，不必一定保证有序。</p>
+<img src="/CARGA/query.png" class="" title="alt text">
+
+<p>计算过程：</p>
+<ol>
+<li>随机选取E个节点，计算他们与 query 的距离，并存在 candidate buffer 中</li>
+<li>在 top-M buffer（这里应该是上一轮的结果，初始阶段为空） 和 candidate buffer 中选取 top M 个结果存储在 Top-M buffer中  </li>
+<li>在Top-M buffer中选取一个还没有被 traverse 的离 query 最近的节点  </li>
+<li>选取与 Step 3 中选择的节点近邻的E个没有访问的节点，并计算他们与query的距离，然后存储在 Candidate buffer 中<br>一直计算到收敛（topM buffer全部是已访问状态）</li>
+</ol>
+<p>参考：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://github.dev/facebookresearch/faiss">https://github.dev/facebookresearch/faiss</a></li>
+<li><a target="_blank" rel="noopener" href="https://arxiv.org/pdf/2308.15136">https://arxiv.org/pdf/2308.15136</a></li>
+<li>kimi_chat</li>
+</ol>
+</div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>Nivdia向量数据库图检索最新标杆——CAGRA</p><p><span>文章作者：</span>王二</p><p><span>发布时间：</span>2024-06-16</p><p><span>最后更新：</span>2024-11-06</p><p><span>原始链接：</span><a href="/CARGA/">https://wanger-sjtu.github.io/CARGA/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="https://wanger-sjtu.github.io/CARGA/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 BY-NC-SA 许可协议。转载请注明出处！</p></div><br><div class="tags"><ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/ANNs/" rel="tag">ANNs</a></li></ul></div><div class="post-nav"><a class="pre" href="/kimi-case-0/">kimi 长上下文 case</a><a class="next" href="/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/">RAG系统构建_技术文档中句子嵌入的挑战</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: '25c52264eb62b88a09d0',
+  clientSecret: '08dd790dcadb5826a40004b55e56414d2f477734',
+  repo: 'wanger-sjtu.github.io',
+  owner: 'wanger-sjtu',
+  admin: ['wanger-sjtu'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="https://wanger-sjtu.github.io"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="关于"><img class="nofancybox" src="/img/avatar.jpg"/></a><p>除了这只猪，还没见过谁敢于如此无视对生活的设置。</p><a class="info-icon" href="https://github.com/Wanger-SJTU" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/paper/">paper</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/python/">python</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%AB%9E%E5%88%86/">竞分</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%B0%E5%BD%95/">记录</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%97%B2%E8%81%8A/">闲聊</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/%E4%BD%93%E7%B3%BB%E7%BB%93%E6%9E%84/" style="font-size: 15px;">体系结构</a> <a href="/tags/TVM/" style="font-size: 15px;">TVM</a> <a href="/tags/ANN/" style="font-size: 15px;">ANN</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/ANNs/" style="font-size: 15px;">ANNs</a> <a href="/tags/CPU/" style="font-size: 15px;">CPU</a> <a href="/tags/LLM/" style="font-size: 15px;">LLM</a> <a href="/tags/SD/" style="font-size: 15px;">SD</a> <a href="/tags/shell/" style="font-size: 15px;">shell</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/Deep-Learning/" style="font-size: 15px;">Deep Learning</a> <a href="/tags/RAG/" style="font-size: 15px;">RAG</a> <a href="/tags/CPP/" style="font-size: 15px;">CPP</a> <a href="/tags/CI/" style="font-size: 15px;">CI</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/constexpr/" style="font-size: 15px;">constexpr</a> <a href="/tags/cuda/" style="font-size: 15px;">cuda</a> <a href="/tags/lecture/" style="font-size: 15px;">lecture</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/DL/" style="font-size: 15px;">DL</a> <a href="/tags/%E6%95%B0%E5%80%BC%E7%B2%BE%E5%BA%A6/" style="font-size: 15px;">数值精度</a> <a href="/tags/%E6%8A%80%E6%9C%AF/" style="font-size: 15px;">技术</a> <a href="/tags/%E7%AB%9E%E5%88%86/" style="font-size: 15px;">竞分</a> <a href="/tags/NDK/" style="font-size: 15px;">NDK</a> <a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/ssd/" style="font-size: 15px;">ssd</a> <a href="/tags/%E5%AD%A6%E4%B9%A0/" style="font-size: 15px;">学习</a> <a href="/tags/vecdb/" style="font-size: 15px;">vecdb</a> <a href="/tags/%E7%88%AC%E8%99%AB/" style="font-size: 15px;">爬虫</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-06/">SSD筆記 - 第六篇 結論</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-05/">SSD筆記 - 第五篇 access pattern, 系統配置</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-04/">SSD筆記 - 第四篇 FTL 其他功能及平行機制</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-03/">ssd_notes_03</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-02/">SSD笔记-第二篇SSD结构与性能评估概述</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-01/">SSD笔记- 第一篇引言</a></li><li class="post-list-item"><a class="post-list-link" href="/fp16-err/">fp16 的累加误差有多大</a></li><li class="post-list-item"><a class="post-list-link" href="/cuda-mode-1/">cuda_mode_1</a></li><li class="post-list-item"><a class="post-list-link" href="/llm-sparse/">端侧 LLM 的PD分离技术之稀疏性</a></li><li class="post-list-item"><a class="post-list-link" href="/fast-dequant/">Nvidia 的快速反量化操作</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2024 <a href="/." rel="nofollow">一只特立独行的猪.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>

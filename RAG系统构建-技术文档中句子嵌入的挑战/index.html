@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>RAG系统构建_技术文档中句子嵌入的挑战 | 一只特立独行的猪</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=1.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/latest/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/pure-min.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/latest/grids-responsive-min.min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/latest/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"><script src="https://www.googletagmanager.com/gtag/js?id=G-D0GZY9PECP" async></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-D0GZY9PECP');
+</script><script type="text/javascript" src="//lib.baomitu.com/clipboard.js/latest/clipboard.min.js"></script><script type="text/javascript" src="//lib.baomitu.com/toastr.js/latest/toastr.min.js"></script><link rel="stylesheet" href="//lib.baomitu.com/toastr.js/latest/toastr.min.css"><meta name="generator" content="Hexo 6.3.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">RAG系统构建_技术文档中句子嵌入的挑战</h1><a id="logo" href="/.">一只特立独行的猪</a><p class="description">既然我存在，就不能装作不存在</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/tags"><i class="fa fa-tag"> 标签</i></a><a href="/categories"><i class="fa fa-tag"> 分类</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">RAG系统构建_技术文档中句子嵌入的挑战</h1><div class="post-meta">2024-06-02<span> | </span><span class="category"><a href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></span><script src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><p>这个是爱立信对RAG pipeline中 retrival阶段的一个实验报告。并得到的一些初步的实验结论。</p>
+<ol>
+<li>sentence embedding 计算的相似度随着文本切分长度增加逐渐变得不可信。</li>
+</ol>
+<p>  他们选取了 10,970条句子，计算了相互之间的余弦相似度。最终形成了下面的Kernel Density Estimate (KDE) 图。</p>
+<p>  从图中可以看到不同句子长度的余弦相似性得分的分布。</p>
+  <img src="/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/image.png" class="" title="The distribution of similarities across 10974 documents of various sizes split by number
+  of words in the document">
+
+<ol start="2">
+<li>Table 1 从论文中提供了对实验假设和观察结果的总结。这些假设和观察结果是基于对技术文档进行的检索增强型生成（RAG）系统实验。以下是对Table 1内容的介绍：</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Hyp Hypothesis (假设)</th>
+<th>Observation (观察)</th>
+<th>Support (支持样本数)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>H1 分割定义和定义词有助于查询</td>
+<td>对于定义，使用定义词和定义分别进行检索可以获得更好的性能</td>
+<td>22 of 30 queries (ID 2, 3)</td>
+</tr>
+<tr>
+<td>H2 不应使用相似度分数来比较检索结果</td>
+<td>观察到不同方法之间的相似度分数不可比，且正确答案的绝对值通常很小</td>
+<td>24 of 30 queries (ID 2, 3)</td>
+</tr>
+<tr>
+<td>H3 关键词的位置影响结果</td>
+<td>关键词越靠近句首，检索准确度越高</td>
+<td>25 of 30 queries (ID 1, 4, 5, 6)</td>
+</tr>
+<tr>
+<td>H4 基于句子的相似度更好</td>
+<td>基于句子和不同段落的相似度检索可以为生成器提供更详细的上下文</td>
+<td>ID F1 - Table 2 (8 of 10 queries)</td>
+</tr>
+<tr>
+<td>H5 生成器对基于句子的相似度</td>
+<td>使用基于句子的相似度和基于段落的检索生成的答案更好</td>
+<td>8 of 10 queries (App. Table 3 - ID F1)</td>
+</tr>
+<tr>
+<td>H6 包含缩写词的定义表现不佳</td>
+<td>生成的答案常常只是展开或提供缩写词，这并不有用</td>
+<td>15 of 16 queries (App. Table 3 - ID F2, F3)</td>
+</tr>
+<tr>
+<td>H7 检索段落的顺序对生成器结果的影响</td>
+<td>实验中我们没有观察到检索段落的顺序对生成器结果产生影响</td>
+<td>NA</td>
+</tr>
+</tbody></table>
+<p>  这个表格展示了作者们在实验中提出的七个假设以及通过实验得到的观察结果。每个假设后面都列出了支持该假设的样本查询数量和具体ID。例如，假设H1表明，如果将定义和定义词分开进行检索，可以提高查询的性能，这一点在30个查询中的22个得到了验证（具体查询ID为2和3）。</p>
+<p>  这些观察结果对于理解技术文档RAG系统的设计和改进至关重要，因为它们揭示了在实际应用中可能遇到的问题和有效的解决策略。</p>
+<p>参考链接：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://arxiv.org/pdf/2404.00657">https://arxiv.org/pdf/2404.00657</a></li>
+</ol>
+</div><div class="post-copyright"><script type="text/javascript" src="/js/copyright.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copyright.css?v=1.0.0"><p><span>本文标题：</span>RAG系统构建_技术文档中句子嵌入的挑战</p><p><span>文章作者：</span>王二</p><p><span>发布时间：</span>2024-06-02</p><p><span>最后更新：</span>2024-11-06</p><p><span>原始链接：</span><a href="/RAG系统构建-技术文档中句子嵌入的挑战/">https://wanger-sjtu.github.io/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/</a><span class="copy-path"><i class="fa fa-clipboard" data-clipboard-text="https://wanger-sjtu.github.io/RAG%E7%B3%BB%E7%BB%9F%E6%9E%84%E5%BB%BA-%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3%E4%B8%AD%E5%8F%A5%E5%AD%90%E5%B5%8C%E5%85%A5%E7%9A%84%E6%8C%91%E6%88%98/"></i></span></p><p><span>版权声明：</span>本博客所有文章除特别声明外，均采用 BY-NC-SA 许可协议。转载请注明出处！</p></div><br><div class="tags"><ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/RAG/" rel="tag">RAG</a></li></ul></div><div class="post-nav"><a class="pre" href="/CARGA/">Nivdia向量数据库图检索最新标杆——CAGRA</a><a class="next" href="/encoder-cross-bi/">Bi-encoder vs Cross encoder? When to use which one?</a></div><div id="container"></div><link rel="stylesheet" type="text/css" href="//unpkg.com/gitalk/dist/gitalk.css"><script type="text/javascript" src="//cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.js"></script><script type="text/javascript" src="//unpkg.com/gitalk/dist/gitalk.min.js"></script><script>var gitalk = new Gitalk({
+  clientID: '25c52264eb62b88a09d0',
+  clientSecret: '08dd790dcadb5826a40004b55e56414d2f477734',
+  repo: 'wanger-sjtu.github.io',
+  owner: 'wanger-sjtu',
+  admin: ['wanger-sjtu'],
+  id: md5(location.pathname),
+  distractionFreeMode: false
+})
+gitalk.render('container')
+</script></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="https://wanger-sjtu.github.io"/></form></div><div class="widget"><div class="author-info"><a class="info-avatar" href="/about/" title="关于"><img class="nofancybox" src="/img/avatar.jpg"/></a><p>除了这只猪，还没见过谁敢于如此无视对生活的设置。</p><a class="info-icon" href="https://github.com/Wanger-SJTU" title="Github" target="_blank" style="margin-inline:5px"> <i class="fa fa-github-square" style="margin-inline:5px"></i></a><a class="info-icon" href="/atom.xml" title="RSS" target="_blank" style="margin-inline:5px"> <i class="fa fa-rss-square" style="margin-inline:5px"></i></a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/paper/">paper</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/python/">python</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%8A%80%E6%9C%AF/">技术</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%AB%9E%E5%88%86/">竞分</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%B0%E5%BD%95/">记录</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%BD%AC%E8%BD%BD/">转载</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%97%B2%E8%81%8A/">闲聊</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/%E4%BD%93%E7%B3%BB%E7%BB%93%E6%9E%84/" style="font-size: 15px;">体系结构</a> <a href="/tags/TVM/" style="font-size: 15px;">TVM</a> <a href="/tags/ANN/" style="font-size: 15px;">ANN</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/ANNs/" style="font-size: 15px;">ANNs</a> <a href="/tags/CPU/" style="font-size: 15px;">CPU</a> <a href="/tags/LLM/" style="font-size: 15px;">LLM</a> <a href="/tags/SD/" style="font-size: 15px;">SD</a> <a href="/tags/shell/" style="font-size: 15px;">shell</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/Deep-Learning/" style="font-size: 15px;">Deep Learning</a> <a href="/tags/RAG/" style="font-size: 15px;">RAG</a> <a href="/tags/CPP/" style="font-size: 15px;">CPP</a> <a href="/tags/CI/" style="font-size: 15px;">CI</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/constexpr/" style="font-size: 15px;">constexpr</a> <a href="/tags/cuda/" style="font-size: 15px;">cuda</a> <a href="/tags/lecture/" style="font-size: 15px;">lecture</a> <a href="/tags/llm/" style="font-size: 15px;">llm</a> <a href="/tags/DL/" style="font-size: 15px;">DL</a> <a href="/tags/%E6%95%B0%E5%80%BC%E7%B2%BE%E5%BA%A6/" style="font-size: 15px;">数值精度</a> <a href="/tags/%E6%8A%80%E6%9C%AF/" style="font-size: 15px;">技术</a> <a href="/tags/%E7%AB%9E%E5%88%86/" style="font-size: 15px;">竞分</a> <a href="/tags/NDK/" style="font-size: 15px;">NDK</a> <a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/ssd/" style="font-size: 15px;">ssd</a> <a href="/tags/%E5%AD%A6%E4%B9%A0/" style="font-size: 15px;">学习</a> <a href="/tags/vecdb/" style="font-size: 15px;">vecdb</a> <a href="/tags/%E7%88%AC%E8%99%AB/" style="font-size: 15px;">爬虫</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-06/">SSD筆記 - 第六篇 結論</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-05/">SSD筆記 - 第五篇 access pattern, 系統配置</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-04/">SSD筆記 - 第四篇 FTL 其他功能及平行機制</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-03/">ssd_notes_03</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-02/">SSD笔记-第二篇SSD结构与性能评估概述</a></li><li class="post-list-item"><a class="post-list-link" href="/ssd-notes-01/">SSD笔记- 第一篇引言</a></li><li class="post-list-item"><a class="post-list-link" href="/fp16-err/">fp16 的累加误差有多大</a></li><li class="post-list-item"><a class="post-list-link" href="/cuda-mode-1/">cuda_mode_1</a></li><li class="post-list-item"><a class="post-list-link" href="/llm-sparse/">端侧 LLM 的PD分离技术之稀疏性</a></li><li class="post-list-item"><a class="post-list-link" href="/fast-dequant/">Nvidia 的快速反量化操作</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2024 <a href="/." rel="nofollow">一只特立独行的猪.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=1.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.js"></script><script type="text/javascript" src="/js/fancybox.js?v=1.0.0"></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/latest/jquery.fancybox.min.css"><script type="text/javascript" src="/js/copycode.js?v=1.0.0" successtext="复制成功！"></script><link rel="stylesheet" type="text/css" href="/css/copycode.css?v=1.0.0"><script type="text/javascript" src="/js/codeblock-resizer.js?v=1.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=1.0.0"></script></div></body></html>
